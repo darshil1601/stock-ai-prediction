@@ -1,0 +1,1 @@
+# app/api — FastAPI routers for prediction and sentiment endpoints
