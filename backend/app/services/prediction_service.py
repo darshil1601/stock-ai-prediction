@@ -17,7 +17,7 @@ from app.services.db_service import get_sentiment_summary, symbol_to_summary_key
 from app.services.feature_engineering import add_features
 from app.services.event_service import max_event_tier
 from app.services.market_intelligence import compute_market_confidence, detect_volatility_event
-from app.services.model_loader import get_model, get_scaler, is_model_ready
+from app.services.model_loader import get_model, get_scaler, is_model_ready, get_latest_version
 from app.services.twelve_fetcher import fetch_historical_data
 
 WINDOW = 60
@@ -239,11 +239,11 @@ def _build_payload(
 
     if market_alert == "danger":
         try:
-            from app.services.retrain_service import auto_retrain_enabled
+            from app.services.training.retrain_service import auto_retrain_enabled
 
             if auto_retrain_enabled():
                 import threading
-                from train_all import train_all_symbols
+                from app.utils.train_all import train_all_symbols
 
                 threading.Thread(target=train_all_symbols, daemon=True).start()
                 print(f"[AI-Self-Correction] CRITICAL EVENT — full retrain started for {symbol}.")
@@ -456,6 +456,7 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
                 "confidence": payload["confidence"],
                 "signal": payload["signal"],
                 "predicted_for": target_date,
+                "model_version": get_latest_version(symbol),
                 "market_alert": payload["market_intelligence"]["market_alert"],
                 "fear_greed_score": score_0_100,
                 "volatility_ratio": payload["market_intelligence"]["spike_ratio"],
