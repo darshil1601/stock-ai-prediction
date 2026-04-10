@@ -1,1 +1,0 @@
-# app/training — Model training and dataset preparation

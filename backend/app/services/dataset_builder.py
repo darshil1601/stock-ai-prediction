@@ -21,9 +21,6 @@ def build_lstm_dataset(df, feature_columns, window_size=60, symbol="XAU/USD"):
     scaler_path = f"app/models/{slug}_scaler.pkl"
     joblib.dump(scaler, scaler_path)
     
-    # Also save as legacy for gold compatibility
-    if symbol == "XAU/USD":
-        joblib.dump(scaler, "app/models/scaler.pkl")
 
     X, y = [], []
 

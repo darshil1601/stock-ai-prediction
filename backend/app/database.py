@@ -10,12 +10,27 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-SUPABASE_URL: str = os.environ["SUPABASE_URL"]
-SUPABASE_KEY: str = os.environ["SUPABASE_KEY"]
+SUPABASE_URL: str = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY: str = os.environ.get("SUPABASE_KEY", "")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# ── Lazy initialization to avoid startup failures ────
+_supabase_client: Client | None = None
 
+def get_supabase() -> Client:
+    """Get or create Supabase client (lazy initialization)."""
+    global _supabase_client
+    if _supabase_client is None:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            logger.warning("⚠️  Supabase credentials not configured. Database operations will fail.")
+            logger.warning("   Set SUPABASE_URL and SUPABASE_KEY in .env")
+            raise ValueError("Supabase credentials missing")
+        _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return _supabase_client
 
+def __getattr__(name: str) -> Client:
+    if name == "supabase":
+        return get_supabase()
+    raise AttributeError(f"module {__name__} has no attribute {name}")
 # ──────────────────────────────────────────────────────
 # MARKET PRICES (Historical OHLCV)
 # Only XAU/USD is stored in Supabase (gold_prices table).
@@ -27,7 +42,7 @@ def save_market_prices(symbol: str, records: list[dict]) -> None:
         return
     # In the new schema, market_data table HAS a symbol column
     try:
-        supabase.table("market_data").upsert(records, on_conflict="symbol,date").execute()
+        get_supabase().table("market_data").upsert(records, on_conflict="symbol,date").execute()
     except Exception as e:
         logger.error("[DB] save_market_prices failed", exc_info=True)
 
@@ -35,7 +50,7 @@ def save_market_prices(symbol: str, records: list[dict]) -> None:
 def save_intelligence_log(data: dict) -> None:
     """Persist intelligence_logs row (news-derived gauge + volatility; legacy column names)."""
     try:
-        supabase.table("intelligence_logs").insert(data).execute()
+        get_supabase().table("intelligence_logs").insert(data).execute()
     except Exception as e:
         logger.error("[DB] save_intelligence_log failed", exc_info=True)
 
@@ -43,7 +58,7 @@ def save_intelligence_log(data: dict) -> None:
 def save_live_price(record: dict) -> None:
     """Save latest price snapshot to live_prices table."""
     try:
-        supabase.table("live_prices").insert(record).execute()
+        get_supabase().table("live_prices").insert(record).execute()
     except Exception as e:
         logger.error("[DB] save_live_price failed", exc_info=True)
 
@@ -51,9 +66,50 @@ def save_live_price(record: dict) -> None:
 def save_model_info(record: dict) -> None:
     """Log training results to model_info table."""
     try:
-        supabase.table("model_info").insert(record).execute()
+        get_supabase().table("model_info").insert(record).execute()
     except Exception as e:
         logger.error("[DB] save_model_info failed", exc_info=True)
+
+
+def get_latest_model_info(symbol: str) -> dict | None:
+    """Fetch latest model record from model_info table."""
+    try:
+        resp = get_supabase().table("model_info") \
+            .select("*") \
+            .eq("symbol", symbol) \
+            .order("last_trained_at", desc=True) \
+            .limit(1) \
+            .execute()
+        if resp.data:
+            return resp.data[0]
+    except Exception as e:
+        logger.error(f"[DB] get_latest_model_info failed: {e}")
+    return None
+
+
+def fetch_pending_events() -> list[dict]:
+    """Find high-impact events that haven't triggered a retrain yet."""
+    try:
+        resp = get_supabase().table("event_log") \
+            .select("*") \
+            .eq("triggered_retrain", False) \
+            .gte("impact_level", 2) \
+            .execute()
+        return resp.data or []
+    except Exception as e:
+        logger.error(f"[DB] fetch_pending_events failed: {e}")
+    return []
+
+
+def mark_event_processed(event_id: str | int) -> None:
+    """Flag event as processed after successful retrain."""
+    try:
+        get_supabase().table("event_log") \
+            .update({"triggered_retrain": True}) \
+            .eq("id", event_id) \
+            .execute()
+    except Exception as e:
+        logger.error(f"[DB] mark_event_processed failed: {e}")
 
 
 # ──────────────────────────────────────────────────────
@@ -61,13 +117,13 @@ def save_model_info(record: dict) -> None:
 # ──────────────────────────────────────────────────────
 def save_prediction(record: dict) -> None:
     """Insert one prediction row."""
-    supabase.table("predictions").insert(record).execute()
+    get_supabase().table("predictions").insert(record).execute()
 
 
 def get_predictions(symbol: str = "XAU/USD", limit: int = 60) -> list[dict]:
     """Fetch latest predictions for a specific symbol."""
     resp = (
-        supabase.table("predictions")
+        get_supabase().table("predictions")
         .select("*")
         .eq("symbol", symbol)
         .order("predicted_for", desc=True)
@@ -81,7 +137,7 @@ def get_predictions(symbol: str = "XAU/USD", limit: int = 60) -> list[dict]:
 def get_average_accuracy(symbol: str = "XAU/USD", days: int = 30) -> float:
     """Calculates mean accuracy (100 - abs(diff%)) for the last N records."""
     try:
-        resp = supabase.table("predictions") \
+        resp = get_supabase().table("predictions") \
             .select("predicted_price, actual_price") \
             .eq("symbol", symbol) \
             .not_.is_("actual_price", "null") \
@@ -124,7 +180,7 @@ def reconcile_predictions():
         today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
         # 1. Fetch all predictions with NULL actual_price
-        resp = supabase.table("predictions") \
+        resp = get_supabase().table("predictions") \
             .select("id, predicted_for, symbol") \
             .is_("actual_price", "null") \
             .execute()
@@ -197,7 +253,7 @@ def reconcile_predictions():
                     continue
 
                 # ── Write actual_price back to Supabase ─────────────────
-                supabase.table("predictions") \
+                get_supabase().table("predictions") \
                     .update({"actual_price": actual_price}) \
                     .eq("id", pred["id"]) \
                     .execute()

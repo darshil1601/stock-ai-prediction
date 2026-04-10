@@ -1,0 +1,41 @@
+# ── Python ────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ── Environment / Secrets (NEVER commit) ──
+.env
+.env.*
+!.env.example
+
+# Railway / Deploy
+.railway/
+
+
+# ── ML Models (store in cloud, not git) ───
+*.h5
+*.pkl
+*.pt
+*.pth
+
+# ── Node / Frontend ────────────────────────
+node_modules/
+dist/
+.vite/
+
+# ── OS ─────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp

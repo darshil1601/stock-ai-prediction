@@ -8,7 +8,7 @@ import logging
 from app.services import db_service
 from app.services.event_service import detect_event
 from app.services.news_service import fetch_all_merged
-from app.services.retrain_service import retrain_model
+from app.services.training.retrain_service import retrain_model
 from app.services.sentiment_service import analyze_sentiment
 from app.services.symbol_detection import detect_symbols
 
