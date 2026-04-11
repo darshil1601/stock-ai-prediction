@@ -23,7 +23,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
   const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
 
   const fetchHistory = () => {
-    fetch(`http://localhost:8000/api/${symbol.toLowerCase()}/history?limit=25`)
+    fetch(`/api/${symbol.toLowerCase()}/history?limit=25`)
       .then((r) => r.json())
       .then((data) => {
         setHistory(data);
@@ -38,7 +38,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
   const handleReconcile = () => {
     setReconciling(true);
     setReconcileMsg(null);
-    fetch(`http://localhost:8000/api/reconcile`, { method: "POST" })
+    fetch(`/api/reconcile`, { method: "POST" })
       .then((r) => r.json())
       .then((data) => {
         setReconcileMsg(data.message ?? "Done.");
@@ -62,7 +62,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
 
   // Auto-trigger reconcile once on mount (backend rate-limits to once per 5 min)
   useEffect(() => {
-    fetch(`http://localhost:8000/api/reconcile`, { method: "POST" }).catch(() => {});
+    fetch(`/api/reconcile`, { method: "POST" }).catch(() => {});
   }, []);
 
   if (loading) return (

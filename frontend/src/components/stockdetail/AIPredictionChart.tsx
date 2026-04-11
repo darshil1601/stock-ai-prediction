@@ -37,7 +37,7 @@ interface Props {
   onApiData?: (data: ApiPayload) => void;
 }
 
-const BACKEND = "http://localhost:8000";
+const BACKEND = "";
 
 // ── Tooltip ──────────────────────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }: any) => {
