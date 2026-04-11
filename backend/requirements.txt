@@ -1,8 +1,4 @@
-# Core dependencies
-
-
-
-
+# Core API Dependencies
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
 requests==2.32.3
@@ -11,20 +7,19 @@ python-dotenv==1.0.1
 supabase==2.5.0
 upstash-redis==1.1.0
 
-# TensorFlow (Locked for Python 3.10.13 ✅)
-tensorflow==2.16.1
-
-# ML libraries (Python 3.10 compatible ✅)
+# Fixed ML Versions for Compatibility
+tensorflow==2.15.0
+keras==2.15.0
 scikit-learn==1.4.2
 pandas==2.2.2
 numpy==1.26.4
-
-
 joblib==1.4.2
+
+# Helpers
 apscheduler==3.10.4
 slowapi==0.1.9
 
-# NLP / AI (heavy libs ⚠️ but required hoy to rakho)
+# NLP
 transformers>=4.36.0
 torch>=2.1.0
 safetensors>=0.4.0
