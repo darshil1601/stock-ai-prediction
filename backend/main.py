@@ -16,16 +16,16 @@ from datetime import timezone
 # Load .env before any app imports
 load_dotenv()
 
-# ── Supress Noisy AI Libraries (TensorFlow, Abseil) ───────────────────────────
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # 0=all, 1=no info, 2=no warnings, 3=no errors
-import logging
-import logging.config
-
 # Silence specific noisy loggers
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
 logging.getLogger("tensorflow").setLevel(logging.ERROR)
 logging.getLogger("absl").setLevel(logging.ERROR)
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
+
+# ── Supress Noisy AI Libraries (TensorFlow, Abseil) ───────────────────────────
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # 0=all, 1=no info, 2=no warnings, 3=no errors
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
 
 # ── Structured Logging Setup ──────────────────────────────────────────────────
 # Using a cleaner, more readable format for the terminal
@@ -259,11 +259,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Railway / Cloud PORT handling
-port = int(os.environ.get("PORT", 8000))
+# Hugging Face / Cloud PORT handling
+port = int(os.environ.get("PORT", 7860))
 
-# Event-triggered retrain endpoint (protected by env check)
+# Event-triggered retrain endpoint
 @app.post("/retrain")
+@app.get("/healthz") # Health check for Hugging Face
 def trigger_retrain():
     """
     POST /retrain — Manual or webhook-triggered full LSTM retrain.
