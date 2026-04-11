@@ -1,0 +1,52 @@
+name: Train and Sync Models
+on:
+  schedule:
+    # Runs at 00:00 UTC every Sunday
+    - cron: '0 0 * * 0'
+  workflow_dispatch: # Allows manual trigger from Actions tab
+
+jobs:
+  train-and-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Training
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          ENV: "production"
+        run: |
+          cd backend
+          python train_all.py
+
+      - name: Push Models to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Add the generated model files
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+          
+          # Force add the models even if they are in .gitignore
+          git add backend/app/models/*.keras || true
+          git add backend/app/models/*.pkl || true
+          
+          git commit -m "Automated model training update" || echo "No changes to commit"
+          
+          # Push to Hugging Face Space (main branch)
+          git push --force https://darshil16:$HF_TOKEN@huggingface.co/spaces/darshil16/stock-prediction-api main
