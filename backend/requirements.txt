@@ -9,7 +9,6 @@ upstash-redis==1.1.0
 
 # Fixed ML Versions for Compatibility
 tensorflow==2.16.2
-keras==2.16.0
 scikit-learn==1.4.2
 pandas==2.2.2
 numpy==1.26.4
