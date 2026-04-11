@@ -88,6 +88,16 @@ def live_price(symbol: str):
     try:
         data = fetch_live_quote(sym)
         redis_cache.set_live_price(data, sym)
+        
+        # Save snapshot to DB
+        from app.database import save_live_price
+        save_live_price({
+            "symbol": sym,
+            "price": data["price"],
+            "change": data["change"],
+            "change_pct": data["change_pct"]
+        })
+        
         return {**data, "source": "twelve_data"}
     except Exception as e:
         logger.error(f"[price] Error for {sym}: {e}", exc_info=True)

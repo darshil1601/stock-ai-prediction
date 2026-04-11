@@ -169,7 +169,11 @@ def train(symbol: str = "XAU/USD") -> None:
         from app.database import save_market_prices, save_model_info
         from datetime import datetime
         
-        market_records = df.tail(1000).to_dict(orient="records")
+        # Filter out engineered features. Only send schema columns to Supabase.
+        cols = ["date", "open", "high", "low", "close", "volume"]
+        market_records = df[cols].tail(1000).copy()
+        market_records["date"] = market_records["date"].astype(str).str[:10]
+        market_records = market_records.to_dict(orient="records")
         for r in market_records:
             r["symbol"] = symbol
         
