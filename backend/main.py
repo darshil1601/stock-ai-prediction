@@ -49,7 +49,7 @@ def print_banner():
     print(banner)
 
 # ── CORS Config (read from env, restrict in production) ───────────────────────
-_raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173")
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "*")
 ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 logger.info(f"[CORS] Allowed origins: {ALLOWED_ORIGINS}")
 
