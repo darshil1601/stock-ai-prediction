@@ -42,10 +42,7 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
           
-          # Force add the models even if they are in .gitignore
-          git add -f backend/app/models/*.keras || true
-          git add -f backend/app/models/*.h5 || true
-          git add -f backend/app/models/*.pkl || true
+          git add backend/app/models/ || true
           
           git commit -m "Automated model training update" || echo "No changes to commit"
           
