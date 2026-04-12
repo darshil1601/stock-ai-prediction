@@ -62,6 +62,13 @@ jobs:
           git add -f backend/app/models/*.h5 backend/app/models/*.pkl || true
           
           # Commit only if changes exist
-          git diff --staged --quiet || (git commit -m "chore: update trained models [skip ci]" && git push)
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update trained models [skip ci]"
+            # Pull latest remote changes before pushing (avoid rejection)
+            git pull --rebase origin main
+            git push
+          else
+            echo "No model changes to commit."
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
