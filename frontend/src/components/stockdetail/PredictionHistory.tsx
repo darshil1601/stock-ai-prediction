@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { formatCurrency } from "../../lib/utils";
+import { api } from "../../services/api";
 
 interface HistoryItem {
   id: number;
@@ -23,8 +24,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
   const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
 
   const fetchHistory = () => {
-    fetch(`/api/${symbol.toLowerCase()}/history?limit=25`)
-      .then((r) => r.json())
+    api.getHistory(symbol, 25)
       .then((data) => {
         setHistory(data);
         setLoading(false);
@@ -38,8 +38,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
   const handleReconcile = () => {
     setReconciling(true);
     setReconcileMsg(null);
-    fetch(`/api/reconcile`, { method: "POST" })
-      .then((r) => r.json())
+    api.reconcileHistory()
       .then((data) => {
         setReconcileMsg(data.message ?? "Done.");
         setReconciling(false);
@@ -62,7 +61,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
 
   // Auto-trigger reconcile once on mount (backend rate-limits to once per 5 min)
   useEffect(() => {
-    fetch(`/api/reconcile`, { method: "POST" }).catch(() => {});
+    api.reconcileHistory().catch(() => {});
   }, []);
 
   if (loading) return (

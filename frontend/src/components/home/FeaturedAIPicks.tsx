@@ -4,6 +4,7 @@ import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
 import type { AIPick, SignalStrength, RiskLevel } from "../../types/home";
 import { aiPicks } from "../../data/homeData";
 import { formatCurrency } from "../../lib/utils";
+import { api } from "../../services/api";
 
 // ── Colour maps ───────────────────────────────────────────────────────────────
 const signalStyles: Record<SignalStrength, string> = {
@@ -241,19 +242,14 @@ export default function FeaturedAIPicks() {
           const sym = pick.symbol.toUpperCase();
           if (["BTC", "GOLD", "EURUSD", "XAUUSD"].includes(sym)) {
             try {
-              const res = await fetch(`/api/${sym.toLowerCase()}/predict`);
-              if (res.ok) {
-                const data = await res.json();
-                // The AI confidence typically comes back formatted as a percentage in risk_metrics
-                // or as a float (0 to 1) in the confidence field.
-                const realConfidence = data.risk_metrics?.aiConfidence 
-                  ?? (data.confidence ? Math.round(data.confidence * 100) : pick.confidence);
-                
-                return {
-                  ...pick,
-                  confidence: realConfidence,
-                };
-              }
+              const data = await api.getPrediction(sym);
+              const realConfidence = data.risk_metrics?.aiConfidence 
+                ?? (data.confidence ? Math.round(data.confidence * 100) : pick.confidence);
+              
+              return {
+                ...pick,
+                confidence: realConfidence,
+              };
             } catch (err) {
               console.error(`Failed to fetch live prediction for ${sym}`, err);
             }
