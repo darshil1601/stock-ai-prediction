@@ -27,9 +27,17 @@ jobs:
       - name: Run Training
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
           TWELVE_DATA_KEY: ${{ secrets.TWELVE_DATA_KEY }}
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          ENABLE_AUTO_RETRAIN: "1"
+          RETRAIN_ON_EVENTS: "1"
+          STARTUP_BACKGROUND_JOBS: "1"
+          NEWS_INGEST_INTERVAL_MINUTES: "5"
+          PORT: "8000"
         run: |
           cd backend
           python train_all.py
