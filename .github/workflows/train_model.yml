@@ -1,0 +1,57 @@
+name: Train AI Models
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Runs every 6 hours
+    - cron: '0 0 * * 0'    # Weekly Full Retrain on Sunday
+  workflow_dispatch:      # Allows manual trigger
+
+jobs:
+  train:
+    name: Run LSTM Training
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+      TWELVE_DATA_KEY: ${{ secrets.TWELVE_DATA_KEY }}
+      NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+      ENABLE_AUTO_RETRAIN: ${{ vars.ENABLE_AUTO_RETRAIN }}
+      RETRAIN_ON_EVENTS: ${{ vars.RETRAIN_ON_EVENTS }}
+      NEWS_INGEST_INTERVAL_MINUTES: ${{ vars.NEWS_INGEST_INTERVAL_MINUTES }}
+      STARTUP_BACKGROUND_JOBS: ${{ vars.STARTUP_BACKGROUND_JOBS }}
+
+    steps:
+      - name: 🛒 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: 🧠 Execute Model Training
+        run: |
+          cd backend
+          python train_all.py
+
+      - name: 💾 Commit and Push Trained Models
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # Force add in case they are in .gitignore
+          git add -f backend/app/models/*.h5 backend/app/models/*.pkl || true
+          git diff --staged --quiet || (git commit -m "chore: update trained models [skip ci]" && git push)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
