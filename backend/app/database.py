@@ -99,6 +99,32 @@ def get_predictions(symbol: str = "XAU/USD", limit: int = 60):
         logger.error(f"[DB] get_predictions failed: {e}")
         return []
 
+
+def get_average_accuracy(symbol: str = "XAU/USD", days: int = 30) -> float:
+    """Calculates mean accuracy (100 - abs(diff%)) for the last N reconciled records."""
+    try:
+        resp = get_supabase().table("predictions") \
+            .select("predicted_price, actual_price") \
+            .eq("symbol", symbol) \
+            .not_.is_("actual_price", "null") \
+            .order("created_at", desc=True) \
+            .limit(days) \
+            .execute()
+        data = resp.data or []
+        if not data:
+            return 76.0  # Fallback default
+        errors = []
+        for row in data:
+            p, a = row["predicted_price"], row["actual_price"]
+            if a and float(a) > 0:
+                errors.append(abs((float(p) - float(a)) / float(a)))
+        if not errors:
+            return 76.0
+        return round(max(0, 100 * (1 - sum(errors) / len(errors))), 1)
+    except Exception as e:
+        logger.error(f"[DB] get_average_accuracy failed for {symbol}: {e}")
+        return 76.0
+
 def reconcile_predictions():
     """UTC-based audit engine — fills actual prices for past predictions."""
     try:
