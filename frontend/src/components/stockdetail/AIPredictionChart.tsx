@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import type { EntryExitZones, ForecastMeta, MarketIntelligence, RiskMetrics } from "../../types/stock";
 import { formatCurrency } from "../../lib/utils";
+import { api } from "../../services/api";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface PricePoint { date: string; price: number }
@@ -36,8 +37,6 @@ interface Props {
   symbol?: string;
   onApiData?: (data: ApiPayload) => void;
 }
-
-const BACKEND = "";
 
 // ── Tooltip ──────────────────────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -92,11 +91,7 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
     setLoading(true);
     setError(null);
 
-    fetch(`${BACKEND}/api/${symbol.toLowerCase()}/predict`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`Backend ${r.status}: ${r.statusText}`);
-        return r.json();
-      })
+    api.getPrediction(symbol)
       .then((payload: ApiPayload) => {
         if (!cancelled) {
           setApiData(payload);

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { SearchResult } from "../../types/search";
 import { Link, useNavigate } from "react-router-dom";
+import { api } from "../../services/api";
 
 interface Props {
   className?: string;
@@ -38,8 +39,7 @@ export default function SearchBar({ className = "" }: Props) {
       if (abortRef.current) abortRef.current.abort();
       const ac = new AbortController();
       abortRef.current = ac;
-      fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: ac.signal })
-        .then((r) => r.json())
+      api.searchSymbol(query, ac.signal)
         .then((data: SearchResult[]) => {
           setResults(data || []);
           setOpen(true);
