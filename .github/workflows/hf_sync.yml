@@ -85,7 +85,10 @@ jobs:
               print("⚠️  No model files found to upload.")
           else:
               for f in model_files:
-                  dest = f"app/models/{os.path.basename(f)}"
+                  # Dockerfile does: COPY backend/ . → /app/
+                  # So models must be at backend/app/models/ in HF Space repo
+                  # which becomes /app/app/models/ in Docker container
+                  dest = f"backend/app/models/{os.path.basename(f)}"
                   print(f"📤 Uploading {f} → {dest}")
                   api.upload_file(
                       path_or_fileobj=f,
