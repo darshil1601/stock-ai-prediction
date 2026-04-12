@@ -8,10 +8,29 @@ from upstash_redis import Redis
 
 load_dotenv()
 
-_redis = Redis(
-    url=os.environ["UPSTASH_REDIS_REST_URL"],
-    token=os.environ["UPSTASH_REDIS_REST_TOKEN"],
-)
+def _get_redis() -> Redis:
+    """Lazy Redis init — prevents startup crash when secrets are missing."""
+    url = os.environ.get("UPSTASH_REDIS_REST_URL")
+    token = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+    if not url or not token:
+        raise RuntimeError("❌ Redis not configured: Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN")
+    return Redis(url=url, token=token)
+
+# Singleton Redis instance
+_redis_instance: Redis | None = None
+
+def _get_redis_client() -> Redis:
+    global _redis_instance
+    if _redis_instance is None:
+        _redis_instance = _get_redis()
+    return _redis_instance
+
+# Backward-compat alias used in main.py (_cache._redis.ping() etc.)
+class _RedisProxy:
+    def __getattr__(self, name):
+        return getattr(_get_redis_client(), name)
+
+_redis = _RedisProxy()
 
 # ── TTL constants ────────────────────────────────────────────────
 PRICE_TTL      = 60    # seconds
