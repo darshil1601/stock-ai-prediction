@@ -56,7 +56,7 @@ def get_model(symbol: str = "XAU/USD"):
             raise FileNotFoundError(f"No model found for {symbol} at {path}")
         
         print(f"[Loader] Loading model: {os.path.basename(path)}")
-        _models[symbol] = load_model(path)
+        _models[symbol] = load_model(path, compile=False)  # compile=False bypasses Keras version mismatch
     return _models[symbol]
 
 
