@@ -354,8 +354,14 @@ def _build_payload(
 
 def run_prediction(symbol: str = "XAU/USD") -> dict:
     lock = get_prediction_lock(symbol)
-    with lock:
+    # Timeout of 90s — prevent deadlock if a previous request was interrupted
+    acquired = lock.acquire(timeout=90)
+    if not acquired:
+        raise RuntimeError(f"Prediction for {symbol} timed out waiting for lock. Try again.")
+    try:
         return _run_prediction_locked(symbol)
+    finally:
+        lock.release()
 
 
 def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
