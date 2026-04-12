@@ -1,16 +1,36 @@
-# Backend (FastAPI) — Local run instructions
+---
+title: Stock AI Prediction API
+emoji: 📈
+colorFrom: indigo
+colorTo: blue
+sdk: docker
+app_file: main.py
+pinned: false
+---
 
-This directory contains a small example FastAPI search endpoint used by the frontend during development.
+# 🚀 AI Stock Prediction Backend
 
-Quick start:
+FastAPI backend powering multi-symbol LSTM-based stock predictions.
 
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn search_api:app --reload --port 8000
-```
+## Supported Symbols
+- `XAU/USD` — Gold Spot
+- `EUR/USD` — Euro Forex
+- `BTC/USD` — Bitcoin
 
-The frontend development server is configured to proxy `/api` to `http://localhost:8000`.
+## Endpoints
+| Endpoint | Description |
+|---|---|
+| `GET /api/{symbol}/predict` | LSTM prediction + signal |
+| `GET /api/{symbol}/history` | Prediction audit log |
+| `GET /api/{symbol}/price` | Live price from Twelve Data |
+| `POST /api/{symbol}/refresh` | Force cache clear + re-predict |
+| `GET /sentiment/{symbol}` | FinBERT sentiment summary |
+| `GET /health` | Dependency health check |
 
-Replace the in-memory `_DATA` in `search_api.py` with a real PostgreSQL-backed query for production (use indexing / full text search).
+## Stack
+- **FastAPI** + **Uvicorn**
+- **TensorFlow** LSTM Models
+- **Supabase** (PostgreSQL)
+- **Upstash Redis** (Caching)
+- **Twelve Data** (Market Data)
+- **NewsAPI** + **FinBERT** (Sentiment)
