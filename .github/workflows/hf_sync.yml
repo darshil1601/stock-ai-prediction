@@ -31,37 +31,43 @@ jobs:
       - name: 📦 Install huggingface_hub
         run: pip install huggingface_hub
 
-      - name: 🚀 Push Code to HF Space (excluding model binaries)
+      - name: 🚀 Push Code to HF Space (clean history, no binaries)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Configure git
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
+          # Stage code in a temp directory
+          mkdir hf_payload
 
-          # Clone the HF Space repo
-          git clone https://darshil16:$HF_TOKEN@huggingface.co/spaces/darshil16/stock-prediction-api hf_space
-
-          # Sync only code (no .h5 / .pkl — those are pushed via API)
+          # Copy backend code only (strictly exclude all binary model files)
           rsync -av \
-            --exclude='.git' \
             --exclude='*.h5' \
             --exclude='*.pkl' \
-            --exclude='frontend/' \
             --exclude='.venv/' \
             --exclude='__pycache__/' \
             --exclude='*.pyc' \
             --exclude='.env' \
-            backend/ hf_space/
+            backend/ hf_payload/
 
-          # Copy root-level config files
-          cp Dockerfile hf_space/ 2>/dev/null || true
-          cp runtime.txt hf_space/ 2>/dev/null || true
+          # Copy HF Space required config files
+          cp backend/README.md hf_payload/README.md 2>/dev/null || true
+          cp Dockerfile hf_payload/Dockerfile 2>/dev/null || true
+          cp runtime.txt hf_payload/runtime.txt 2>/dev/null || true
 
-          cd hf_space
+          # Init a FRESH git repo (orphan = no history = no binary files ever)
+          cd hf_payload
+          git init
+          git checkout --orphan main
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
           git add .
-          git diff --staged --quiet || (git commit -m "sync: code update from GitHub Actions" && git push)
-          echo "✅ Code sync to HF Space complete."
+          git commit -m "sync: clean code deploy from GitHub Actions"
+
+          # Force push the clean history to HF Space (no binaries in history)
+          git push --force \
+            https://darshil16:$HF_TOKEN@huggingface.co/spaces/darshil16/stock-prediction-api \
+            main
+
+          echo "✅ Clean code sync to HF Space complete."
 
       - name: 📤 Upload Model Files to HF Space via API
         env:
