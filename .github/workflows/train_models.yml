@@ -27,8 +27,8 @@ jobs:
       - name: Run Training
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          TWELVE_DATA_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TWELVE_DATA_KEY: ${{ secrets.TWELVE_DATA_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           cd backend
@@ -38,13 +38,13 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Add the generated model files
+          # Add the generated model files (using -f to override .gitignore rules if any)
           git config --global user.email "github-actions@github.com"
           git config --global user.name "GitHub Actions"
           
-          git add backend/app/models/ || true
+          git add -f backend/app/models/*.h5 backend/app/models/*.pkl || true
           
-          git commit -m "Automated model training update" || echo "No changes to commit"
+          git commit -m "Automated model training update via GitHub Actions" || echo "No changes to commit"
           
           # Push to Hugging Face Space (main branch)
           git push --force https://darshil16:$HF_TOKEN@huggingface.co/spaces/darshil16/stock-prediction-api main
