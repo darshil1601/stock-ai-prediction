@@ -47,16 +47,30 @@ def get_scaler_path(symbol: str, version: str | None = None) -> str:
 def get_model(symbol: str = "XAU/USD"):
     global _models
     if symbol not in _models:
+        import tensorflow as tf
         from tensorflow.keras.models import load_model  # lazy import
+
+        # ── Keras 3.x / 2.x Compatibility Patch ──────────────────────────────
+        # Models saved with Keras 3.x include 'quantization_config' in Dense
+        # layer config. Older Keras doesn't recognize this kwarg.
+        # Solution: Patch Dense to silently drop unknown kwargs during load.
+        class _PatchedDense(tf.keras.layers.Dense):
+            def __init__(self, *args, **kwargs):
+                kwargs.pop("quantization_config", None)
+                super().__init__(*args, **kwargs)
+
         version = get_latest_version(symbol)
         path = get_model_path(symbol, version)
 
         if not os.path.exists(path):
-            # Final fallback: try any model file matching the slug
             raise FileNotFoundError(f"No model found for {symbol} at {path}")
-        
+
         print(f"[Loader] Loading model: {os.path.basename(path)}")
-        _models[symbol] = load_model(path, compile=False)  # compile=False bypasses Keras version mismatch
+        _models[symbol] = load_model(
+            path,
+            custom_objects={"Dense": _PatchedDense},
+            compile=False,
+        )
     return _models[symbol]
 
 
