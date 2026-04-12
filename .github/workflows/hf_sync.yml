@@ -3,7 +3,7 @@ name: Sync to Hugging Face
 on:
   push:
     branches:
-      - main  # Every push to main syncs to HF Space
+      - main  # Every push to main syncs code to HF Space
   workflow_run:
     workflows: ["Train AI Models"]
     types:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   deploy:
-    name: Sync to HF Space
+    name: Sync Code to HF Space
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Run for direct push OR when training workflow succeeds
@@ -22,10 +22,70 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true
 
-      - name: 🚀 Push to Hugging Face Space
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 📦 Install huggingface_hub
+        run: pip install huggingface_hub
+
+      - name: 🚀 Push Code to HF Space (excluding model binaries)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git push --force https://darshil16:$HF_TOKEN@huggingface.co/spaces/darshil16/stock-prediction-api main
+          # Configure git
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+          # Clone the HF Space repo
+          git clone https://darshil16:$HF_TOKEN@huggingface.co/spaces/darshil16/stock-prediction-api hf_space
+
+          # Sync only code (no .h5 / .pkl — those are pushed via API)
+          rsync -av \
+            --exclude='.git' \
+            --exclude='*.h5' \
+            --exclude='*.pkl' \
+            --exclude='frontend/' \
+            --exclude='.venv/' \
+            --exclude='__pycache__/' \
+            --exclude='*.pyc' \
+            --exclude='.env' \
+            backend/ hf_space/
+
+          # Copy root-level config files
+          cp Dockerfile hf_space/ 2>/dev/null || true
+          cp runtime.txt hf_space/ 2>/dev/null || true
+
+          cd hf_space
+          git add .
+          git diff --staged --quiet || (git commit -m "sync: code update from GitHub Actions" && git push)
+          echo "✅ Code sync to HF Space complete."
+
+      - name: 📤 Upload Model Files to HF Space via API
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python - <<'EOF'
+          import glob, os
+          from huggingface_hub import HfApi
+
+          api = HfApi()
+          model_files = glob.glob("backend/app/models/*.h5") + glob.glob("backend/app/models/*.pkl")
+
+          if not model_files:
+              print("⚠️  No model files found to upload.")
+          else:
+              for f in model_files:
+                  dest = f"app/models/{os.path.basename(f)}"
+                  print(f"📤 Uploading {f} → {dest}")
+                  api.upload_file(
+                      path_or_fileobj=f,
+                      path_in_repo=dest,
+                      repo_id="darshil16/stock-prediction-api",
+                      repo_type="space",
+                      token=os.environ["HF_TOKEN"],
+                  )
+                  print(f"✅ Uploaded: {dest}")
+          EOF
