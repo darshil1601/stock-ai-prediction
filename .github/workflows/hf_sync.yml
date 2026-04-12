@@ -1,6 +1,9 @@
 name: Sync to Hugging Face
 
 on:
+  push:
+    branches:
+      - main  # Every push to main syncs to HF Space
   workflow_run:
     workflows: ["Train AI Models"]
     types:
@@ -11,7 +14,8 @@ jobs:
     name: Sync to HF Space
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Run for direct push OR when training workflow succeeds
+    if: ${{ github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: 🛒 Checkout Repository
