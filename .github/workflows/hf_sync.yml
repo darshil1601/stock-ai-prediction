@@ -38,7 +38,8 @@ jobs:
           # Stage code in a temp directory
           mkdir hf_payload
 
-          # Copy backend code only (strictly exclude all binary model files)
+          # Copy backend code preserving folder structure (Dockerfile expects backend/)
+          mkdir -p hf_payload/backend
           rsync -av \
             --exclude='*.h5' \
             --exclude='*.pkl' \
@@ -46,7 +47,7 @@ jobs:
             --exclude='__pycache__/' \
             --exclude='*.pyc' \
             --exclude='.env' \
-            backend/ hf_payload/
+            backend/ hf_payload/backend/
 
           # Copy HF Space required config files
           cp backend/README.md hf_payload/README.md 2>/dev/null || true
