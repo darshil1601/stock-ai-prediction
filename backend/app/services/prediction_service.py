@@ -398,16 +398,15 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
 
     profile_partial = get_asset_profile(symbol)
     # Candle confirmation cutoff per asset class:
-    #   BTC (crypto, 24/7): Daily candle runs 00:00–23:59 UTC.
-    #     It is PARTIAL all day until 23:30 UTC. Using today's partial close
-    #     causes the prediction to change every hour as BTC price moves.
-    #     Fix: treat as partial until 23:30 UTC → always use yesterday's
-    #     confirmed close during the day, predict today's close.
+    #   BTC (crypto, 24/7): No market close exists. Always use the latest available
+    #     data from TwelveData as the prediction base. The DB sync fix (single query
+    #     with IS NULL + ORDER BY) ensures chart and audit always match.
     #   Forex/Commodities (XAU/USD, EUR/USD): Markets close ~22:00 UTC.
-    #     Treat as partial until 22:30 UTC.
+    #     Drop today's partial candle until 22:30 UTC to avoid predicting from
+    #     incomplete intraday data (prevents double-date bug on chart).
     if last_candle_date == today_utc:
-        if profile_partial.trades_weekends:  # crypto (BTC)
-            is_partial = now_utc_hour < 23.5  # ✅ Partial all day until 23:30 UTC
+        if profile_partial.trades_weekends:  # crypto (BTC) — 24/7, no market close
+            is_partial = False  # Always use latest price; dropping it hides current market reality
         else:  # forex (EUR/USD), commodities (XAU/USD)
             is_partial = now_utc_hour < 22.5
 
@@ -419,7 +418,7 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
             df = df.iloc[:-1].copy()
         else:
             logger.info(
-                f"[{symbol}] Today's candle ({today_utc}) confirmed at {now_utc_hour:.1f}h UTC."
+                f"[{symbol}] Using today's candle ({today_utc}) at {now_utc_hour:.1f}h UTC as base."
             )
 
     news_summary = get_sentiment_summary(symbol_to_summary_key(symbol))
