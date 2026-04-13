@@ -128,29 +128,29 @@ def get_average_accuracy(symbol: str = "XAU/USD", days: int = 30) -> float:
 def reconcile_predictions():
     """UTC-based audit engine — fills actual prices for past predictions."""
     try:
-        from datetime import datetime, timezone
+        from datetime import datetime, timezone, timedelta
         from app.services.twelve_fetcher import fetch_historical_data
 
         now_utc = datetime.now(timezone.utc)
         today_utc = now_utc.strftime("%Y-%m-%d")
-        # After 22:30 UTC all major markets (forex, commodities, crypto) have closed.
-        # Include today's date in reconciliation so the audit fills in same-day actuals.
+        yesterday_utc = (now_utc - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # Only include today's date AFTER all markets have closed (22:30 UTC).
+        # Before that, use yesterday as the cutoff so today's live/partial price
+        # is NEVER written as the actual close — that would corrupt the audit.
         markets_closed_today = (now_utc.hour + now_utc.minute / 60.0) >= 22.5
-        cutoff_date = today_utc if markets_closed_today else (
-            (now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-             .strftime("%Y-%m-%d"))
-        )
+        cutoff_date = today_utc if markets_closed_today else yesterday_utc
 
         resp = get_supabase().table("predictions").select("id, predicted_for, symbol").is_("actual_price", "null").execute()
 
         null_preds = resp.data or []
         if not null_preds: return
 
-        # Group by symbol and fetch actuals
+        # Group by symbol — only reconcile dates up to and including cutoff
         from collections import defaultdict
         by_symbol = defaultdict(list)
-        # Include today if markets have closed; otherwise only strictly past dates
         for p in [x for x in null_preds if x["predicted_for"] <= cutoff_date]:
+
             by_symbol[p["symbol"]].append(p)
 
         for sym, preds in by_symbol.items():
