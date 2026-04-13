@@ -113,8 +113,11 @@ def _stabilize_prediction(
 
     vol_cap_multi = profile.volatility_cap_multiplier
     if vol_event.get("is_event"):
-        # Expand the volatility cap during actual market events, don't clip the big moves!
-        vol_cap_multi = max(vol_cap_multi, vol_event.get("spike_ratio", 1.0) * 0.9)
+        # Expand the volatility cap during market events — but cap the expansion:
+        # For crypto (BTC), a spike ratio of 5× would push cap_multi to 4.5 — too high.
+        # We limit the event boost so it never exceeds 2.0× the asset's own cap_multiplier.
+        event_boost = vol_event.get("spike_ratio", 1.0) * 0.9
+        vol_cap_multi = min(vol_cap_multi * 2.0, max(vol_cap_multi, event_boost))
 
     # Cap return based on asset profile volatility caps
     return_cap = realized_volatility * vol_cap_multi
@@ -124,8 +127,14 @@ def _stabilize_prediction(
     raw_return = 0.0 if not np.isfinite(raw_return) else float(raw_return)
     raw_return += sentiment_bias
     
-    # Trust the LSTM more for accuracy! Lower volatility (Gold) has very little dampening.
-    dampening = 0.90 if profile.asset_class == "crypto" else 1.0
+    # BTC needs stronger dampening — raw LSTM return can be erratic during high-vol regimes.
+    # Gold/EUR: almost no dampening since their volatility cap already constrains big moves.
+    if profile.asset_class == "crypto":
+        dampening = 0.70  # Was 0.90 — significantly reduce LSTM raw return influence for BTC
+    elif profile.asset_class == "forex":
+        dampening = 0.95  # Slight dampening for forex to avoid micro-move overestimation
+    else:
+        dampening = 1.0   # Commodities (Gold): cap already handles it
     blended_return = (profile.model_weight * raw_return * dampening) + ((1.0 - profile.model_weight) * baseline_return)
     
     # Final clip
@@ -378,15 +387,34 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
         raise RuntimeError(f"Not enough data rows ({len(df)}) for {symbol}.")
 
     # ── Handle Partial Candles (The 'Skipping Dates' Fix) ─────────────────────
-    # If the last row from Twelve Data is 'Today' (UTC), it's a partial candle.
-    # We drop it to ensure we always predict 'Today' based on 'Yesterday's' close.
-    # This prevents the system from skipping today and jumping to tomorrow.
+    # If the last row from Twelve Data is 'Today' (UTC), it may be a partial candle.
+    # We also drop it if there are fewer than 4 hours of data (partial session).
+    # For forex/commodities (Gold, EUR), markets close around 22:00 UTC — we use
+    # a market-close buffer: treat the candle as partial until 22:30 UTC.
+    # This prevents the double-prediction bug where two forecasts land on the same date.
     today_utc = datetime.utcnow().date()
+    now_utc_hour = datetime.utcnow().hour + datetime.utcnow().minute / 60.0
     last_candle_date = datetime.strptime(str(df["date"].iloc[-1])[:10], "%Y-%m-%d").date()
-    
+
+    profile_partial = get_asset_profile(symbol)
+    # BTC trades 24/7 — only drop if it's genuinely early in the day (<= 6h)
+    # Forex/commodities — drop today's candle until 22:30 UTC (market close + buffer)
     if last_candle_date == today_utc:
-        logger.info(f"[{symbol}] Today's partial candle ({today_utc}) detected. Using Yesterday's close to predict Today.")
-        df = df.iloc[:-1].copy()
+        if profile_partial.trades_weekends:  # crypto (BTC)
+            is_partial = now_utc_hour <= 6.0
+        else:  # forex (EUR/USD), commodities (XAU/USD)
+            is_partial = now_utc_hour < 22.5
+
+        if is_partial:
+            logger.info(
+                f"[{symbol}] Partial candle detected at {now_utc_hour:.1f}h UTC. "
+                f"Dropping today ({today_utc}) and predicting from yesterday's close."
+            )
+            df = df.iloc[:-1].copy()
+        else:
+            logger.info(
+                f"[{symbol}] Today's candle ({today_utc}) is confirmed close. Using it as base."
+            )
 
     news_summary = get_sentiment_summary(symbol_to_summary_key(symbol))
     vol_event = detect_volatility_event(df)
