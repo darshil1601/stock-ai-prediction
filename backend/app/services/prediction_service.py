@@ -494,29 +494,33 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
                 "warnings": payload["market_intelligence"]["warnings"],
             }
 
-            # 2. Check for existing UNRECONCILED prediction for this date (single query)
-            existing = (
+            # 2. Check for ANY existing prediction for this symbol+date
+            #    (both reconciled and unreconciled — prevents duplicate inserts)
+            all_existing = (
                 supabase.table("predictions")
-                .select("id")
+                .select("id, actual_price")
                 .eq("symbol", symbol)
                 .eq("predicted_for", target_date)
-                .is_("actual_price", "null")
-                .order("created_at", desc=True)  # Always update the most recent entry
+                .order("created_at", desc=True)
                 .execute()
             )
 
-            if existing.data:
-                # Discrepancy Fix: Update existing pending prediction instead of inserting new one.
-                # Only update if it hasn't been reconciled yet.
-                pred_id = existing.data[0]["id"]
-                supabase.table("predictions") \
-                    .update(prediction_record) \
-                    .eq("id", pred_id) \
-                    .is_("actual_price", "null") \
-                    .execute()
-                logger.info(f"[{symbol}] Updated existing prediction for {target_date}")
+            if all_existing.data:
+                # Find the first unreconciled row to update
+                unreconciled = [r for r in all_existing.data if r.get("actual_price") is None]
+                if unreconciled:
+                    # Update the most recent unreconciled prediction
+                    pred_id = unreconciled[0]["id"]
+                    supabase.table("predictions") \
+                        .update(prediction_record) \
+                        .eq("id", pred_id) \
+                        .execute()
+                    logger.info(f"[{symbol}] Updated prediction {pred_id} for {target_date}")
+                else:
+                    # All rows are already reconciled — do NOT insert a new one
+                    logger.info(f"[{symbol}] Prediction for {target_date} already reconciled, skipping insert")
             else:
-                # 3. Save new AI Prediction
+                # No prediction exists for this date — create one
                 save_prediction(prediction_record)
                 logger.info(f"[{symbol}] Saved new prediction for {target_date}")
 
