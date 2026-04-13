@@ -397,23 +397,29 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
     last_candle_date = datetime.strptime(str(df["date"].iloc[-1])[:10], "%Y-%m-%d").date()
 
     profile_partial = get_asset_profile(symbol)
-    # BTC trades 24/7 — only drop if it's genuinely early in the day (<= 6h)
-    # Forex/commodities — drop today's candle until 22:30 UTC (market close + buffer)
+    # Candle confirmation cutoff per asset class:
+    #   BTC (crypto, 24/7): Daily candle runs 00:00–23:59 UTC.
+    #     It is PARTIAL all day until 23:30 UTC. Using today's partial close
+    #     causes the prediction to change every hour as BTC price moves.
+    #     Fix: treat as partial until 23:30 UTC → always use yesterday's
+    #     confirmed close during the day, predict today's close.
+    #   Forex/Commodities (XAU/USD, EUR/USD): Markets close ~22:00 UTC.
+    #     Treat as partial until 22:30 UTC.
     if last_candle_date == today_utc:
         if profile_partial.trades_weekends:  # crypto (BTC)
-            is_partial = now_utc_hour <= 6.0
+            is_partial = now_utc_hour < 23.5  # ✅ Partial all day until 23:30 UTC
         else:  # forex (EUR/USD), commodities (XAU/USD)
             is_partial = now_utc_hour < 22.5
 
         if is_partial:
             logger.info(
-                f"[{symbol}] Partial candle detected at {now_utc_hour:.1f}h UTC. "
-                f"Dropping today ({today_utc}) and predicting from yesterday's close."
+                f"[{symbol}] Partial candle at {now_utc_hour:.1f}h UTC — "
+                f"dropping today ({today_utc}), using yesterday's confirmed close."
             )
             df = df.iloc[:-1].copy()
         else:
             logger.info(
-                f"[{symbol}] Today's candle ({today_utc}) is confirmed close. Using it as base."
+                f"[{symbol}] Today's candle ({today_utc}) confirmed at {now_utc_hour:.1f}h UTC."
             )
 
     news_summary = get_sentiment_summary(symbol_to_summary_key(symbol))
