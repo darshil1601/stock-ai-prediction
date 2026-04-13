@@ -462,20 +462,12 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
 
         target_date = payload["predicted"][0]["date"] if payload["predicted"] else None
         if target_date:
-            existing = (
-                supabase.table("predictions")
-                .select("id")
-                .eq("symbol", symbol)
-                .eq("predicted_for", target_date)
-                .execute()
-            )
-
             # 1. Log generic market sentiment (Intelligence History)
             mi = payload["market_intelligence"]
             nc = int(mi.get("news_count") or 0)
             score_0_100 = int(round((float(mi["sentiment_score"]) + 1.0) * 50.0)) if nc else 50
             score_0_100 = max(0, min(100, score_0_100))
-            
+
             save_intelligence_log({
                 "symbol": symbol,
                 "fear_greed_score": score_0_100,
@@ -497,12 +489,14 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
                 "warnings": payload["market_intelligence"]["warnings"],
             }
 
-            # 2. Check for existing UNRECONCILED prediction for this date
+            # 2. Check for existing UNRECONCILED prediction for this date (single query)
             existing = (
                 supabase.table("predictions")
                 .select("id")
                 .eq("symbol", symbol)
                 .eq("predicted_for", target_date)
+                .is_("actual_price", "null")
+                .order("created_at", desc=True)  # Always update the most recent entry
                 .execute()
             )
 

@@ -130,17 +130,27 @@ def reconcile_predictions():
     try:
         from datetime import datetime, timezone
         from app.services.twelve_fetcher import fetch_historical_data
-        
-        today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        now_utc = datetime.now(timezone.utc)
+        today_utc = now_utc.strftime("%Y-%m-%d")
+        # After 22:30 UTC all major markets (forex, commodities, crypto) have closed.
+        # Include today's date in reconciliation so the audit fills in same-day actuals.
+        markets_closed_today = (now_utc.hour + now_utc.minute / 60.0) >= 22.5
+        cutoff_date = today_utc if markets_closed_today else (
+            (now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+             .strftime("%Y-%m-%d"))
+        )
+
         resp = get_supabase().table("predictions").select("id, predicted_for, symbol").is_("actual_price", "null").execute()
-        
+
         null_preds = resp.data or []
         if not null_preds: return
 
         # Group by symbol and fetch actuals
         from collections import defaultdict
         by_symbol = defaultdict(list)
-        for p in [x for x in null_preds if x["predicted_for"] < today_utc]:
+        # Include today if markets have closed; otherwise only strictly past dates
+        for p in [x for x in null_preds if x["predicted_for"] <= cutoff_date]:
             by_symbol[p["symbol"]].append(p)
 
         for sym, preds in by_symbol.items():
