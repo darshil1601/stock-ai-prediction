@@ -15,4 +15,67 @@ body,
 
 body {
   @apply bg-brand text-slate-200 antialiased;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+}
+
+/* ─── Scrollbar styling ─────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.25);
+}
+
+/* ─── Hide scrollbar utility (used in nav tabs) ────── */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Smooth scroll for anchor links ───────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ─── Touch target minimum ─────────────────────────── */
+@media (pointer: coarse) {
+  button, a, [role="button"], [tabindex] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ─── Prevent horizontal scroll on all viewports ───── */
+#root {
+  overflow-x: hidden;
+}
+
+/* ─── Fade-in animation for dropdowns ──────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade {
+  animation: fadeIn 0.15s ease-out;
+}
+
+/* ─── TradingView widget responsive overrides ──────── */
+.tradingview-widget-container {
+  width: 100% !important;
+}
+.tradingview-widget-container iframe {
+  width: 100% !important;
 }

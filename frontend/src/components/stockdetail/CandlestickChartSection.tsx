@@ -49,7 +49,10 @@ export default function CandlestickChartSection({
     const id   = `tv-${symbol}-${Date.now()}`;
     const node = document.createElement("div");
     node.id    = id;
-    node.style.cssText = "width:100%; height:520px;";
+    
+    // Responsive height logic: 350px on mobile, 520px on desktop
+    const h = window.innerWidth < 640 ? 350 : 520;
+    node.style.cssText = `width:100%; height:${h}px;`;
     root.appendChild(node);
 
     try {
@@ -62,9 +65,9 @@ export default function CandlestickChartSection({
         style:             "1",          // candlestick
         locale:            "en",
         width:             "100%",
-        height:            520,
-        hide_top_toolbar:  false,
-        hide_side_toolbar: false,
+        height:            h,
+        hide_top_toolbar:  window.innerWidth < 640,
+        hide_side_toolbar: window.innerWidth < 640,
         toolbar_bg:        "#0b1220",
         enable_publishing: false,
         allow_symbol_change: false,
@@ -87,7 +90,6 @@ export default function CandlestickChartSection({
       s.onload  = buildWidget;
       document.body.appendChild(s);
     } else {
-      // Script tag already inserted but not yet ready
       const poll = () => {
         if ((window as any).TradingView) { buildWidget(); return; }
         setTimeout(poll, 150);
@@ -95,30 +97,43 @@ export default function CandlestickChartSection({
       poll();
     }
 
+    // Standard resize handling to rebuild widget with new height if needed
+    let resizeTimer: any;
+    const handleResize = () => {
+       clearTimeout(resizeTimer);
+       resizeTimer = setTimeout(buildWidget, 500);
+    };
+    window.addEventListener('resize', handleResize);
+
     return () => {
+      window.removeEventListener('resize', handleResize);
       try { if (widgetRef.current?.remove) widgetRef.current.remove(); } catch (_) {}
       if (containerRef.current) containerRef.current.innerHTML = "";
     };
   }, [buildWidget]);
 
   return (
-    <div className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-2xl overflow-hidden">
+    <div className="bg-[#0b1220] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
       {/* Header row */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3
-                      px-5 py-3.5 border-b border-[rgba(255,255,255,0.05)]">
-        <div className="flex items-center gap-2">
-          <span className="w-1.5 h-5 rounded-full bg-indigo-500 flex-shrink-0" />
-          <span className="text-sm font-semibold text-slate-200">Candlestick Chart</span>
-          <span className="text-xs text-slate-600 ml-1">OHLCV · Real-time</span>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4
+                      px-5 py-4 sm:py-3.5 border-b border-slate-800">
+        <div className="flex items-center gap-2.5">
+          <span className="w-1.5 h-6 rounded-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.4)] flex-shrink-0" />
+          <div>
+             <span className="text-xs sm:text-sm font-black text-slate-100 uppercase tracking-widest">Global Candlestick</span>
+             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">OHLCV · Real-time Feed</p>
+          </div>
         </div>
-        <TimeframeTabs active={activeTimeframe} onChange={onTimeframeChange} />
+        <div className="overflow-x-auto">
+           <TimeframeTabs active={activeTimeframe} onChange={onTimeframeChange} />
+        </div>
       </div>
 
       {/* Chart mount point */}
       <div 
         ref={containerRef} 
-        className="w-full" 
-        style={{ minHeight: "520px", background: "#0b1220" }} 
+        className="w-full relative" 
+        style={{ minHeight: "350px", background: "#0b1220" }} 
       />
     </div>
   );

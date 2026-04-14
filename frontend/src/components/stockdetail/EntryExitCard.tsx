@@ -17,17 +17,17 @@ interface RowProps {
 
 function ZoneRow({ label, value, dotColor, tag, tagStyle }: RowProps) {
   return (
-    <div className="flex items-center justify-between py-3
-                    border-b border-[rgba(255,255,255,0.04)] last:border-0">
-      <div className="flex items-center gap-2.5">
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-        <span className="text-xs text-slate-400 font-medium uppercase tracking-widest">
+    <div className="flex items-center justify-between py-3.5 sm:py-4
+                    border-b border-slate-800/60 last:border-0 group/row">
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor} shadow-[0_0_8px_currentColor]`} />
+        <span className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-widest group-hover/row:text-slate-400 transition-colors">
           {label}
         </span>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-slate-100 tabular-nums">{value}</span>
-        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${tagStyle}`}>
+      <div className="flex items-center gap-2 sm:gap-3">
+        <span className="text-xs sm:text-sm font-black text-slate-100 tabular-nums tracking-tight">{value}</span>
+        <span className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-lg font-black border tracking-tighter shadow-sm ${tagStyle}`}>
           {tag}
         </span>
       </div>
@@ -40,8 +40,8 @@ export default function EntryExitCard({ zones, currency = "INR" }: Props) {
 
   const isSell = signal === "SELL";
   const isHold = signal === "HOLD";
-  const entryLabel = isSell ? "Sell Zone" : isHold ? "Watch Zone" : "Buy Zone";
-  const entryTag   = isSell ? "SELL"      : isHold ? "OBSERVE"    : "BUY";
+  const entryLabel = isSell ? "Short Zone" : isHold ? "Observation" : "Entry Zone";
+  const entryTag   = isSell ? "SHORT"      : isHold ? "IDLE"       : "ENTRY";
 
   const entryDotColor = isSell
     ? "bg-rose-400"
@@ -50,36 +50,40 @@ export default function EntryExitCard({ zones, currency = "INR" }: Props) {
     : "bg-emerald-400";
 
   const entryTagStyle = isSell
-    ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
+    ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
     : isHold
-    ? "bg-amber-500/10 text-amber-400 border-amber-500/25"
-    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/25";
+    ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
 
   const headerBarColor = isSell
-    ? "bg-rose-500"
+    ? "bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.4)]"
     : isHold
-    ? "bg-amber-500"
-    : "bg-emerald-500";
+    ? "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.4)]"
+    : "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]";
 
-  // clamp visual bar at 5:1 ratio = 100 %
   const rrBarWidth = Math.min((riskReward / 5) * 100, 100);
 
   return (
-    <div className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)]
-                    rounded-2xl p-5 flex flex-col h-full">
+    <div className="bg-[#0b1220] border border-slate-800 rounded-2xl p-5 sm:p-7 flex flex-col h-full shadow-2xl relative overflow-hidden">
+      {/* Background Decor */}
+      <div className={`absolute -top-10 -left-10 w-32 h-32 rounded-full blur-[80px] pointer-events-none opacity-20 ${isSell ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+
       {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className={`w-1.5 h-5 rounded-full ${headerBarColor} flex-shrink-0`} />
-        <span className="text-sm font-semibold text-slate-200">Entry / Exit Intelligence</span>
+      <div className="flex items-center gap-3 mb-5 sm:mb-6">
+        <span className={`w-1.5 h-6 rounded-full ${headerBarColor} flex-shrink-0`} />
+        <div>
+           <span className="text-xs sm:text-sm font-black text-slate-100 uppercase tracking-widest block">Trade Intelligence</span>
+           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">AI Strategy Layer</p>
+        </div>
         {isHold && (
-          <span className="ml-auto text-[9px] font-black px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase tracking-wider">
-            ⏸ Neutral — No Clear Edge
+          <span className="ml-auto text-[9px] font-black px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase tracking-widest shadow-sm">
+            Neutral Edge
           </span>
         )}
       </div>
 
       {/* Zone Rows */}
-      <div className="flex-1">
+      <div className="flex-1 space-y-1">
         <ZoneRow
           label={entryLabel}
           value={`${formatCurrency(signalZone[0], currency)} – ${formatCurrency(signalZone[1], currency)}`}
@@ -92,44 +96,43 @@ export default function EntryExitCard({ zones, currency = "INR" }: Props) {
           value={formatCurrency(stopLoss, currency)}
           dotColor={isSell ? "bg-emerald-400" : "bg-rose-400"}
           tag="SL"
-          tagStyle={isSell ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25" : "bg-rose-500/10 text-rose-400 border-rose-500/25"}
+          tagStyle={isSell ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"}
         />
         <ZoneRow
-          label="Target 1"
+          label="Profit Target 1"
           value={formatCurrency(target1, currency)}
-          dotColor="bg-amber-400"
+          dotColor="bg-sky-400"
           tag="T1"
-          tagStyle="bg-amber-500/10 text-amber-400 border-amber-500/25"
+          tagStyle="bg-sky-500/10 text-sky-400 border-sky-500/20"
         />
         <ZoneRow
-          label="Target 2"
+          label="Profit Target 2"
           value={formatCurrency(target2, currency)}
-          dotColor="bg-blue-400"
+          dotColor="bg-violet-400"
           tag="T2"
-          tagStyle="bg-blue-500/10 text-blue-400 border-blue-500/25"
+          tagStyle="bg-violet-500/10 text-violet-400 border-violet-500/20"
         />
       </div>
 
       {/* Risk : Reward */}
-      <div className="mt-4 p-3.5 rounded-xl bg-[rgba(255,255,255,0.02)]
-                      border border-[rgba(255,255,255,0.05)]">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-slate-400 uppercase tracking-wider">Risk : Reward</span>
-          <div className="flex items-baseline gap-1">
-            <span className="text-xs text-slate-500">1 :</span>
-            <span className="text-lg font-bold text-emerald-400 tabular-nums">{riskReward}</span>
+      <div className="mt-6 p-4 sm:p-5 rounded-2xl bg-slate-950/50 border border-slate-800 shadow-inner">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-[10px] sm:text-xs text-slate-500 font-black uppercase tracking-widest">Efficiency Multiplier</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-[10px] font-bold text-slate-600">RR</span>
+            <span className="text-lg sm:text-xl font-black text-emerald-400 tabular-nums tracking-tighter">1 : {riskReward}</span>
           </div>
         </div>
         {/* Gradient bar */}
-        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+        <div className="h-2 rounded-full bg-slate-900 border border-slate-800/50 overflow-hidden shadow-inner">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 transition-all duration-700 ease-out"
+            className="h-full rounded-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)] transition-all duration-1000 ease-out"
             style={{ width: `${rrBarWidth}%` }}
           />
         </div>
-        <div className="flex justify-between mt-1.5 text-[10px] text-slate-600">
-          <span>Risk</span>
-          <span>Reward</span>
+        <div className="flex justify-between mt-2.5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-600">
+          <span>High Risk</span>
+          <span>High Reward</span>
         </div>
       </div>
     </div>

@@ -41,43 +41,31 @@ const SingleQuoteCard = memo(function SingleQuoteCard({
       aria-label={`View ${title} detail page`}
       onClick={() => navigate(navPath)}
       onKeyDown={(e) => e.key === "Enter" && navigate(navPath)}
+      className="relative overflow-hidden rounded-2xl p-4 cursor-pointer
+                 transition-all duration-200 ease-out
+                 hover:-translate-y-0.5 hover:shadow-xl
+                 w-full"
       style={{
         background: "linear-gradient(135deg, rgba(23,32,52,0.97) 0%, rgba(13,18,36,0.99) 60%, rgba(30,26,15,0.6) 100%)",
         border: `1px solid ${borderColor}`,
-        borderRadius: 16,
-        padding: "16px",
-        position: "relative",
-        overflow: "hidden",
-        width: "100%",
-        maxWidth: 320,
-        cursor: "pointer",
-        transition: "transform 0.18s ease, box-shadow 0.18s ease"
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "translateY(-3px)";
         e.currentTarget.style.boxShadow = `0 12px 40px ${glowColor.replace("0.13", "0.18")}`;
         e.currentTarget.style.borderColor = glowColor.replace("0.13", "0.35");
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.transform = "translateY(0)";
         e.currentTarget.style.boxShadow = "none";
         e.currentTarget.style.borderColor = borderColor;
       }}
     >
       <span
+        className="absolute -top-8 -right-8 w-28 h-28 rounded-full pointer-events-none"
         style={{
-          position: "absolute",
-          top: -30,
-          right: -30,
-          width: 110,
-          height: 110,
-          borderRadius: "50%",
           background: `radial-gradient(circle, ${glowColor} 0%, transparent 70%)`,
-          pointerEvents: "none",
         }}
       />
-      <div className="tradingview-widget-container" ref={containerRef} style={{ pointerEvents: "none" }}></div>
-      <p style={{ margin: "10px 0 0", fontSize: 10, color: "#475569", letterSpacing: "0.05em", textAlign: "center" }}>
+      <div className="tradingview-widget-container w-full pointer-events-none" ref={containerRef} />
+      <p className="mt-2 text-[10px] text-slate-500 tracking-wide text-center">
         {symbol.split(":")[1] || symbol} · Click for live chart →
       </p>
     </div>
@@ -87,15 +75,15 @@ const SingleQuoteCard = memo(function SingleQuoteCard({
 export default function MarketOverviewCards() {
   return (
     <>
-      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#cbd5e1", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm sm:text-[15px] font-bold text-slate-300 tracking-wide uppercase">
           Market Overview
         </h2>
-        <span style={{ fontSize: 11, color: "#475569", fontWeight: 500 }}>
+        <span className="text-[11px] text-slate-500 font-medium">
           Real-time TV Data
         </span>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <SingleQuoteCard 
           symbol="OANDA:XAUUSD" 
           title="GOLD" 

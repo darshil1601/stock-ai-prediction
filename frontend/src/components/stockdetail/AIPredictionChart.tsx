@@ -52,20 +52,20 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     v != null ? formatCurrency(v, "USD") : "—";
 
   return (
-    <div className="bg-[#0d1526] border border-slate-700/50 rounded-xl shadow-2xl p-3 text-xs min-w-[160px]">
-      <div className="text-slate-400 font-medium mb-2 border-b border-white/5 pb-1.5">{label}</div>
+    <div className="bg-[#0b1220] border border-slate-700/50 rounded-xl shadow-2xl p-3 text-[10px] sm:text-xs min-w-[140px] sm:min-w-[160px]">
+      <div className="text-slate-500 font-bold mb-2 border-b border-white/5 pb-1.5 uppercase tracking-widest">{label}</div>
       {actual != null && (
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1.5">
           <span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-          <span className="text-slate-400">Actual:</span>
-          <span className="text-slate-100 font-semibold ml-auto tabular-nums">{fmt(actual)}</span>
+          <span className="text-slate-400 font-medium">Actual Price:</span>
+          <span className="text-slate-100 font-bold ml-auto tabular-nums">{fmt(actual)}</span>
         </div>
       )}
       {predicted != null && (
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
-          <span className="text-slate-400">Predicted:</span>
-          <span className="text-slate-100 font-semibold ml-auto tabular-nums">{fmt(predicted)}</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.4)]" />
+          <span className="text-slate-400 font-medium">AI Forecast:</span>
+          <span className="text-slate-100 font-bold ml-auto tabular-nums">{fmt(predicted)}</span>
         </div>
       )}
     </div>
@@ -118,7 +118,7 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
         accuracy: 0, 
         signal: "HOLD" as const, 
         confidence: 0, 
-        model: "Loading..." 
+        model: "Syncing..." 
       };
     }
 
@@ -176,104 +176,110 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
   const sigStyle = SIGNAL_STYLE[signal] ?? SIGNAL_STYLE["HOLD"];
 
   return (
-    <div className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-2xl p-5">
+    <div className="bg-[#0b1220] border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-2xl relative overflow-hidden">
+      {/* ── Background Glow ── */}
+      <div className="absolute -top-32 -left-32 w-64 h-64 bg-violet-500/5 blur-[120px] pointer-events-none" />
+
       {/* ── Header ── */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-6 relative z-10">
         <div className="flex items-center gap-3">
-          <div className="w-1.5 h-6 rounded-full bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.3)] flex-shrink-0" />
+          <div className="w-1.5 h-6 rounded-full bg-violet-500 shadow-[0_0_12px_rgba(139,92,246,0.5)] flex-shrink-0" />
           <div>
-            <span className="text-sm font-black text-slate-100 uppercase tracking-widest">AI Prediction Overlay</span>
+            <span className="text-xs sm:text-sm font-black text-slate-100 uppercase tracking-widest">Neural Forecast Overlay</span>
             <div className="flex items-center gap-2 mt-0.5">
-              {loading && <span className="text-[10px] text-slate-500 animate-pulse uppercase font-bold tracking-tighter">Syncing Engine…</span>}
-              {error && <span className="text-[10px] text-amber-500/80 font-bold uppercase tracking-tighter">⚠ Mode: Simulation</span>}
-              {apiData && <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-tighter flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-                Live Neural Feed
+              {loading && <span className="text-[10px] text-slate-500 animate-pulse uppercase font-bold tracking-tight">Syncing Engine…</span>}
+              {apiData && <span className="text-[10px] text-emerald-400/80 font-bold uppercase tracking-tight flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.3)]" />
+                Live Neural Stream
               </span>}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end gap-6">
+        <div className="flex items-center justify-between sm:justify-end gap-6 overflow-x-auto scrollbar-none pb-1 sm:pb-0">
             {/* Legend */}
-            <div className="hidden sm:flex items-center gap-5 text-[10px] font-bold uppercase tracking-tighter text-slate-500">
-                <div className="flex items-center gap-1.5">
-                    <span className="w-3 h-0.5 bg-blue-400 rounded-full" />
-                    <span>Actual</span>
+            <div className="flex flex-shrink-0 items-center gap-5 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <div className="flex items-center gap-2">
+                    <span className="w-4 h-0.5 bg-blue-400 rounded-full shadow-[0_0_8px_rgba(96,165,250,0.3)]" />
+                    <span>Actual Price</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                    <span className="w-3 border-t border-dashed border-emerald-400" />
-                    <span>Forecast</span>
+                <div className="flex items-center gap-2">
+                    <span className="w-4 border-t-2 border-dashed border-emerald-400" />
+                    <span>AI Forecast</span>
                 </div>
             </div>
 
             <button 
                 onClick={() => document.getElementById('performance-audit')?.scrollIntoView({ behavior: 'smooth' })}
-                className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 hover:border-white/20 transition-all active:scale-95"
+                className="flex-shrink-0 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 hover:text-slate-100 transition-all active:scale-95"
             >
-                View Audit
+                Audit Log
             </button>
         </div>
       </div>
 
       {/* ── Meta row ── */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <span className="text-xs text-slate-500">Prediction Accuracy (Past 30 Days):</span>
-        <span className="text-xs font-bold text-violet-400">{accuracy}%</span>
-        <span className="text-xs px-2 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20">
-          {model}
-        </span>
+      <div className="flex flex-wrap items-center gap-3 mb-6 relative z-10">
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/50 border border-slate-800">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Score:</span>
+            <span className="text-xs font-black text-violet-400">{accuracy}%</span>
+        </div>
+        
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-600/10 border border-violet-500/20">
+            <span className="text-xs font-black text-violet-300 uppercase tracking-tight">{model}</span>
+        </div>
 
         {/* Signal */}
-        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border ${sigStyle.bg}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${sigStyle.dot}`} />
-          <span className={`text-xs font-semibold ${sigStyle.text}`}>{signal}</span>
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border shadow-sm ${sigStyle.bg}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${sigStyle.dot} shadow-[0_0_8px_currentColor]`} />
+          <span className={`text-xs font-black uppercase tracking-tight ${sigStyle.text}`}>{signal}</span>
         </div>
 
         {/* Confidence */}
-        <span className="text-xs text-slate-500">
-          Confidence: <span className="text-slate-300 font-semibold">{Math.round(confidence * 100)}%</span>
-        </span>
+        <div className="px-3 py-1.5 rounded-xl bg-slate-900/50 border border-slate-800 flex items-center gap-1.5">
+           <span className="text-[10px] font-bold text-slate-500 uppercase">Trust:</span>
+           <span className="text-xs font-black text-slate-200 tabular-nums">{Math.round(confidence * 100)}%</span>
+        </div>
 
         {/* Next price */}
         {apiData && (
-          <span className="text-xs text-slate-500 ml-auto">
-            Next price:{" "}
-            <span className="text-emerald-400 font-semibold tabular-nums">
-              {formatCurrency(apiData.next_price, "USD")}
-            </span>
-          </span>
+          <div className="sm:ml-auto flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-600/10 border border-emerald-500/20">
+             <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Target:</span>
+             <span className="text-sm font-black text-emerald-300 tabular-nums">
+               {formatCurrency(apiData.next_price, "USD")}
+             </span>
+          </div>
         )}
       </div>
 
-      {/* ── Market Intelligence Alert Strip (event/news warning) ── */}
+      {/* ── Market Intelligence Alert Strip ── */}
       {apiData?.market_intelligence && apiData.market_intelligence.market_alert !== "normal" && (
-        <div className={`rounded-xl border px-3 py-2.5 mb-1 flex items-start gap-2.5 ${
+        <div className={`rounded-2xl border px-4 py-3 mb-4 flex items-start sm:items-center gap-3 relative z-10 shadow-lg ${
           apiData.market_intelligence.market_alert === "danger"  ? "bg-rose-500/10 border-rose-500/25"   :
           apiData.market_intelligence.market_alert === "warning" ? "bg-orange-500/10 border-orange-500/25" :
                                                                     "bg-amber-500/10 border-amber-500/25"
         }`}>
-          <span className="text-base leading-none flex-shrink-0">
-            {apiData.market_intelligence.market_alert === "danger"  ? "🔴" :
-             apiData.market_intelligence.market_alert === "warning" ? "🟠" : "🟡"}
+          <span className="text-xl leading-none flex-shrink-0 mt-0.5 sm:mt-0">
+            {apiData.market_intelligence.market_alert === "danger"  ? "🚨" :
+             apiData.market_intelligence.market_alert === "warning" ? "⚠️" : "💡"}
           </span>
           <div className="flex-1 min-w-0">
-            <div className={`text-[11px] font-bold mb-0.5 ${
+            <div className={`text-[11px] font-black uppercase tracking-widest mb-1 ${
               apiData.market_intelligence.market_alert === "danger"  ? "text-rose-400"   :
               apiData.market_intelligence.market_alert === "warning" ? "text-orange-400" : "text-amber-400"
             }`}>
               {apiData.market_intelligence.event_detected
-                ? `High Volatility Event — ${apiData.market_intelligence.spike_ratio.toFixed(1)}× normal move detected`
-                : `News sentiment — ${(apiData.market_intelligence.sentiment_score ?? 0).toFixed(2)} (${apiData.market_intelligence.sentiment_label ?? "neutral"}) · Event ${apiData.market_intelligence.event_tier ?? "LOW"}`
+                ? `Volatility Spike — ${apiData.market_intelligence.spike_ratio.toFixed(1)}x Deviation`
+                : `Market News Stream — Sentiment: ${apiData.market_intelligence.sentiment_label ?? "Neutral"}`
               }
             </div>
             {apiData.market_intelligence.warnings.slice(0, 1).map((w, i) => (
-              <p key={i} className="text-[10px] text-slate-400 leading-snug truncate">{w}</p>
+              <p key={i} className="text-xs text-slate-400 leading-snug font-medium italic truncate">{w}</p>
             ))}
           </div>
-          <div className="text-right flex-shrink-0">
-            <div className="text-[10px] text-slate-500">Confidence</div>
-            <div className={`text-xs font-bold ${
+          <div className="text-right flex-shrink-0 hidden sm:block">
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Certainty</div>
+            <div className={`text-sm font-black tabular-nums ${
               apiData.market_intelligence.market_alert === "danger"  ? "text-rose-400"   :
               apiData.market_intelligence.market_alert === "warning" ? "text-orange-400" : "text-amber-400"
             }`}>{Math.round(confidence * 100)}%</div>
@@ -282,54 +288,49 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
       )}
 
       {/* ── Chart ── */}
-      <div style={{ height: 290 }}>
+      <div className="relative z-10" style={{ height: window.innerWidth < 640 ? 250 : 320 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
             <defs>
               <linearGradient id="confBandGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor="#7c3aed" stopOpacity={0.20} />
-                <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.04} />
+                <stop offset="0%"   stopColor="#7c3aed" stopOpacity={0.15} />
+                <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.02} />
               </linearGradient>
             </defs>
 
-            <CartesianGrid stroke="rgba(255,255,255,0.04)" strokeDasharray="3 3" />
+            <CartesianGrid stroke="rgba(255,255,255,0.03)" vertical={false} />
 
             <XAxis
               dataKey="date"
               stroke="#334155"
-              tick={{ fill: "#64748b", fontSize: 10 }}
+              tick={{ fill: "#64748b", fontSize: 9, fontWeight: 700 }}
               tickLine={false}
               axisLine={{ stroke: "rgba(255,255,255,0.05)" }}
               interval="preserveStartEnd"
             />
             <YAxis
               stroke="#334155"
-              tick={{ fill: "#64748b", fontSize: 10 }}
+              tick={{ fill: "#64748b", fontSize: 9, fontWeight: 700 }}
               tickLine={false}
               axisLine={{ stroke: "rgba(255,255,255,0.05)" }}
-              width={64}
+              width={54}
               tickFormatter={yTickFmt}
             />
 
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }} />
 
-            {/* Confidence band */}
             <Area type="monotone" dataKey="bandBase"  stackId="band" stroke="none" fill="transparent" dot={false} legendType="none" isAnimationActive={false} />
-            <Area type="monotone" dataKey="bandWidth" stackId="band" stroke="rgba(124,58,237,0.25)" strokeWidth={1} strokeDasharray="3 3" fill="url(#confBandGrad)" dot={false} legendType="none" isAnimationActive={false} />
+            <Area type="monotone" dataKey="bandWidth" stackId="band" stroke="rgba(124,58,237,0.2)" strokeWidth={1} strokeDasharray="3 3" fill="url(#confBandGrad)" dot={false} legendType="none" isAnimationActive={false} />
 
-            {/* Actual price line */}
-            <Line type="monotone" dataKey="actual"    stroke="#60a5fa" strokeWidth={2} dot={false} connectNulls={false} isAnimationActive animationDuration={800} />
+            <Line type="monotone" dataKey="actual"    stroke="#60a5fa" strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive animationDuration={1000} shadow="0 0 10px rgba(96,165,250,0.5)" />
+            <Line type="monotone" dataKey="predicted" stroke="#34d399" strokeWidth={2.5} strokeDasharray="6 4" dot={false} connectNulls={false} isAnimationActive animationDuration={1000} />
 
-            {/* Predicted price line */}
-            <Line type="monotone" dataKey="predicted" stroke="#34d399" strokeWidth={2} strokeDasharray="6 4" dot={false} connectNulls={false} isAnimationActive animationDuration={800} />
-
-            {/* Today marker */}
             {todayDate && (
               <ReferenceLine
                 x={todayDate}
-                stroke="rgba(255,255,255,0.18)"
+                stroke="rgba(255,255,255,0.2)"
                 strokeDasharray="4 4"
-                label={{ value: "Today", fill: "#64748b", fontSize: 10, position: "insideTopRight" }}
+                label={{ value: "Now", fill: "#94a3b8", fontSize: 10, fontWeight: 700, position: "insideTopRight" }}
               />
             )}
           </ComposedChart>

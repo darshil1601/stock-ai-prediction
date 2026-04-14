@@ -33,7 +33,8 @@ const MarketTabs = memo(function MarketTabs({
     <div
       role="tablist"
       aria-label="Market category tabs"
-      className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/70 border border-slate-700/50 w-fit overflow-x-auto scrollbar-none"
+      className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/70 border border-slate-700/50
+                 w-full sm:w-fit overflow-x-auto scrollbar-none"
     >
       {TABS.map((tab) => {
         const active = tab === selected;
@@ -45,8 +46,8 @@ const MarketTabs = memo(function MarketTabs({
             id={`market-tab-${tab.toLowerCase()}`}
             onClick={() => onChange(tab)}
             className={`
-              relative flex items-center gap-1.5 px-4 py-2 rounded-lg
-              text-sm font-medium whitespace-nowrap
+              relative flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2 rounded-lg
+              text-xs sm:text-sm font-medium whitespace-nowrap flex-shrink-0
               transition-all duration-200 outline-none focus-visible:ring-2
               focus-visible:ring-emerald-500/50
               ${
@@ -56,7 +57,7 @@ const MarketTabs = memo(function MarketTabs({
               }
             `}
           >
-            <span className="text-base leading-none">{TAB_ICONS[tab]}</span>
+            <span className="text-sm sm:text-base leading-none">{TAB_ICONS[tab]}</span>
             <span>{tab}</span>
             {/* Count badge */}
             <span

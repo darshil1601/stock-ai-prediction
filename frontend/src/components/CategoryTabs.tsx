@@ -12,7 +12,8 @@ export default memo(function CategoryTabs({
   onChange: (t: TabKey) => void;
 }) {
   return (
-    <div className="flex items-center gap-1.5 p-1 bg-slate-800/60 border border-slate-700/50 rounded-xl w-fit">
+    <div className="flex items-center gap-1.5 p-1 bg-slate-800/60 border border-slate-700/50
+                    rounded-xl overflow-x-auto scrollbar-none w-full sm:w-fit">
       {TABS.map((t) => {
         const active = t === selected;
         return (
@@ -20,8 +21,8 @@ export default memo(function CategoryTabs({
             key={t}
             onClick={() => onChange(t)}
             className={`
-              relative px-4 py-1.5 rounded-lg text-sm font-medium
-              transition-all duration-200 outline-none
+              relative px-3 sm:px-4 py-2 rounded-lg text-sm font-medium
+              transition-all duration-200 outline-none whitespace-nowrap flex-shrink-0
               ${
                 active
                   ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20"

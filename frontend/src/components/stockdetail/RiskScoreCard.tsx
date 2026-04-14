@@ -11,31 +11,32 @@ interface GaugeProps {
   stroke?: number;
 }
 
-function CircularGauge({ value, color, label, sub, size = 86, stroke = 7 }: GaugeProps) {
+function CircularGauge({ value, color, label, sub, size = 80, stroke = 6 }: GaugeProps) {
   const r             = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;
   const dashOffset    = circumference - (Math.min(value, 100) / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-2 flex-shrink-0">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={stroke} />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={stroke} />
           <circle
             cx={size / 2} cy={size / 2} r={r} fill="none"
             stroke={color} strokeWidth={stroke}
             strokeDasharray={circumference} strokeDashoffset={dashOffset}
             strokeLinecap="round"
-            style={{ transition: "stroke-dashoffset 1.2s ease-out" }}
+            className="transition-all duration-1000 ease-out"
+            style={{ filter: `drop-shadow(0 0 3px ${color}66)` }}
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-sm font-bold text-slate-100 tabular-nums leading-none">{value}%</span>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-xs sm:text-sm font-black text-slate-100 tabular-nums leading-none tracking-tighter">{value}%</span>
         </div>
       </div>
       <div className="text-center">
-        <div className="text-xs font-semibold text-slate-300">{label}</div>
-        <div className="text-[10px] text-slate-500 mt-0.5">{sub}</div>
+        <div className="text-[10px] sm:text-xs font-black text-slate-300 uppercase tracking-tight">{label}</div>
+        <div className="text-[8px] sm:text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{sub}</div>
       </div>
     </div>
   );
@@ -49,10 +50,10 @@ const RISK_CFG = {
 } as const;
 
 const ALERT_CFG = {
-  normal:  { bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20", icon: "✅", label: "Normal Market"   },
-  caution: { bg: "bg-amber-500/10",   text: "text-amber-400",   border: "border-amber-500/20",   icon: "🟡", label: "Caution"         },
-  warning: { bg: "bg-orange-500/10",  text: "text-orange-400",  border: "border-orange-500/20",  icon: "🟠", label: "High Volatility"  },
-  danger:  { bg: "bg-rose-500/10",    text: "text-rose-400",    border: "border-rose-500/20",    icon: "🔴", label: "Event Alert"      },
+  normal:  { bg: "bg-emerald-500/10", text: "text-emerald-400", border: "border-emerald-500/20", icon: "✓", label: "Normal"   },
+  caution: { bg: "bg-amber-500/10",   text: "text-amber-400",   border: "border-amber-500/20",   icon: "!", label: "Caution"   },
+  warning: { bg: "bg-orange-500/10",  text: "text-orange-400",  border: "border-orange-500/20",  icon: "!", label: "High Vol"  },
+  danger:  { bg: "bg-rose-500/10",    text: "text-rose-400",    border: "border-rose-500/20",    icon: "!!", label: "Event"    },
 } as const;
 
 function sentimentToWidth(score: number) {
@@ -67,9 +68,9 @@ function sentimentColor(score: number) {
 }
 
 const TIER_BADGE: Record<string, { bg: string; text: string; border: string }> = {
-  LOW:    { bg: "bg-slate-500/10", text: "text-slate-400", border: "border-slate-500/25" },
-  MEDIUM: { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/25" },
-  HIGH:   { bg: "bg-rose-500/10", text: "text-rose-400", border: "border-rose-500/25" },
+  LOW:    { bg: "bg-slate-500/10", text: "text-slate-400", border: "border-slate-500/20" },
+  MEDIUM: { bg: "bg-amber-500/10", text: "text-amber-400", border: "border-amber-500/20" },
+  HIGH:   { bg: "bg-rose-500/10", text: "text-rose-400", border: "border-rose-500/20" },
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -99,89 +100,95 @@ export default function RiskScoreCard({ metrics, marketIntelligence }: Props) {
   const sentimentActive = newsCount > 0 || (marketIntelligence?.sentiment_applied ?? false);
 
   return (
-    <div className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-2xl p-5 flex flex-col h-full gap-4">
+    <div className="bg-[#0b1220] border border-slate-800 rounded-2xl p-5 sm:p-7 flex flex-col h-full gap-5 sm:gap-6 shadow-2xl relative overflow-hidden">
+      
+      {/* Background Decor */}
+      <div className="absolute -bottom-12 -right-12 w-48 h-48 bg-rose-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="w-1.5 h-5 rounded-full bg-rose-500 flex-shrink-0" />
-          <span className="text-sm font-semibold text-slate-200">Risk Score</span>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+        <div className="flex items-center gap-3">
+          <span className="w-1.5 h-6 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.4)] flex-shrink-0" />
+          <div>
+             <span className="text-xs sm:text-sm font-black text-slate-100 uppercase tracking-widest block">Safe Guard Pro</span>
+             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Risk Assessment Log</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${alertCfg.bg} ${alertCfg.text} ${alertCfg.border}`}>
+        <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+          <span className={`text-[9px] font-black px-2 py-1 rounded-lg border flex items-center gap-1 uppercase tracking-tight shadow-sm ${alertCfg.bg} ${alertCfg.text} ${alertCfg.border}`}>
             <span>{alertCfg.icon}</span>
             <span>{alertCfg.label}</span>
           </span>
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${tierCfg.bg} ${tierCfg.text} ${tierCfg.border}`}>
-            Event: {eventTier}
+          <span className={`text-[9px] font-black px-2 py-1 rounded-lg border uppercase tracking-tight shadow-sm ${tierCfg.bg} ${tierCfg.text} ${tierCfg.border}`}>
+            Tier: {eventTier}
           </span>
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+          <span className={`text-[9px] font-black px-2 py-1 rounded-lg border uppercase tracking-tight shadow-sm ${cfg.bg} ${cfg.text} ${cfg.border}`}>
             {riskLevel} Risk
           </span>
         </div>
       </div>
 
       {eventDetected && warnings.length > 0 && (
-        <div className={`rounded-xl border p-3 ${alertCfg.bg} ${alertCfg.border}`}>
-          <div className={`text-[11px] font-bold mb-1.5 uppercase tracking-wider ${alertCfg.text}`}>
-            ⚡ Market Event — Confidence Adjusted
+        <div className={`rounded-xl border p-3 sm:p-4 bg-slate-950/40 relative z-10 ${alertCfg.border}`}>
+          <div className={`text-[10px] font-black mb-1.5 uppercase tracking-widest flex items-center gap-2 ${alertCfg.text}`}>
+            <span className="animate-pulse">⚡</span> High Impact Cluster Detected
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {warnings.map((w, i) => (
-              <p key={i} className="text-[11px] text-slate-300 leading-snug">{w}</p>
+              <p key={i} className="text-[11px] text-slate-400 font-medium leading-relaxed italic border-l-2 border-slate-800 pl-3">{w}</p>
             ))}
           </div>
-          {spikeRatio > 1.5 && (
-            <div className={`mt-2 text-[10px] font-semibold ${alertCfg.text}`}>
-              📊 Price move is {spikeRatio.toFixed(1)}× vs 20-day average volatility
+          {spikeRatio > 1.3 && (
+            <div className={`mt-3 text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 ${alertCfg.text}`}>
+              <span className="p-1 rounded bg-current/10">📊</span> Volatility spike is {spikeRatio.toFixed(1)}x normal baseline
             </div>
           )}
         </div>
       )}
 
-      <div className="flex items-start justify-around gap-2 py-1">
-        <CircularGauge value={volatility}    color="#f87171" label="Volatility"    sub="30-day σ"    />
-        <CircularGauge value={aiConfidence}  color="#818cf8" label="AI Confidence" sub="MomentumNet" />
-        <CircularGauge value={safetyScore}   color={cfg.color} label="Safety Score" sub="Composite" />
+      <div className="flex flex-row items-center justify-around gap-2 py-2 sm:py-4 relative z-10 flex-wrap sm:flex-nowrap">
+        <CircularGauge value={volatility}    color="#f87171" label="Volatility"    sub="30D StdDev" />
+        <CircularGauge value={aiConfidence}  color="#818cf8" label="AI Strength"   sub="Neural Con" />
+        <CircularGauge value={safetyScore}   color={cfg.color} label="Safety Rating" sub="Aggregated" />
       </div>
 
-      <div className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] rounded-xl px-3 py-2.5">
-        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">News sentiment (FinBERT)</span>
-          <span className={`text-[10px] font-bold ${sCol.text}`}>
-            {sentimentActive ? `${sentimentLabel} · ${newsCount} articles` : "No aggregate yet"}
+      <div className="bg-slate-950/50 border border-slate-800 rounded-2xl px-4 py-3.5 relative z-10 shadow-inner">
+        <div className="flex items-center justify-between mb-2.5 gap-2 flex-wrap">
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">FinBERT News Stream</span>
+          <span className={`text-[9px] font-black uppercase tracking-tight ${sCol.text}`}>
+            {sentimentActive ? `${sentimentLabel} · ${newsCount} Sources` : "No Active Stream"}
           </span>
         </div>
-        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden relative">
+        <div className="h-2 bg-slate-900 rounded-full overflow-hidden relative shadow-inner border border-slate-800/50">
           <div
-            className={`h-full rounded-full transition-all duration-1000 ${sentimentActive ? sCol.bar : "bg-slate-600"}`}
+            className={`h-full rounded-full transition-all duration-1000 shadow-[0_0_8px_currentColor] ${sentimentActive ? sCol.bar : "bg-slate-700"}`}
             style={{ width: `${sentimentActive ? sentimentToWidth(sentimentScore) : 50}%` }}
           />
         </div>
-        <div className="flex justify-between mt-1">
-          <span className="text-[9px] text-rose-400 font-medium">Negative</span>
-          <span className="text-[10px] font-bold text-slate-200 tabular-nums">
-            {sentimentActive ? sentimentScore.toFixed(2) : "—"}
+        <div className="flex justify-between mt-2.5">
+          <span className="text-[8px] sm:text-[9px] text-rose-500 font-black uppercase tracking-widest">Negative</span>
+          <span className="text-[10px] font-black text-slate-300 tabular-nums">
+            {sentimentActive ? sentimentScore.toFixed(2) : "0.00"}
           </span>
-          <span className="text-[9px] text-emerald-400 font-medium">Positive</span>
+          <span className="text-[8px] sm:text-[9px] text-emerald-500 font-black uppercase tracking-widest">Positive</span>
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2.5 relative z-10">
         {(
           [
-            ["Volatility Index",    `${volatility}%`,   volatility   > 60 ? "🔴 High"    : volatility   > 35 ? "🟡 Medium" : "🟢 Low"    ],
-            ["AI Model Confidence", `${aiConfidence}%`, aiConfidence >= 75 ? "💪 Strong"  : aiConfidence >= 60 ? "✅ Moderate" : "⚠️ Weak" ],
-            ["Active Model",        "MomentumNet v2",   "Running"],
+            ["Historical Volatility", `${volatility}%`,   volatility   > 60 ? "CRITICAL" : volatility   > 35 ? "STABLE" : "OPTIMAL" ],
+            ["AI Confidence Level",   `${aiConfidence}%`, aiConfidence >= 75 ? "SUPERIOR" : aiConfidence >= 60 ? "VERIFIED" : "WATCH" ],
+            ["Analysis Logic",        "MomentumNet v2",   "ACTIVE"],
           ] as [string, string, string][]
         ).map(([lbl, val, badge]) => (
           <div
             key={lbl}
-            className="flex items-center justify-between px-3 py-2 rounded-xl bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)]"
+            className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-950/30 border border-slate-800/50 group/item hover:bg-slate-900/50 transition-colors"
           >
-            <span className="text-xs text-slate-400">{lbl}</span>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-100 tabular-nums">{val}</span>
-              <span className="text-[10px] text-slate-500 hidden sm:inline">· {badge}</span>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-widest group-hover/item:text-slate-400 transition-colors">{lbl}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs sm:text-sm font-black text-slate-100 tabular-nums tracking-tight">{val}</span>
+              <span className="hidden sm:inline-block text-[9px] font-black text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20 uppercase tracking-widest">{badge}</span>
             </div>
           </div>
         ))}

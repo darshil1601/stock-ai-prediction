@@ -74,21 +74,21 @@ export default function Prediction() {
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5 pb-8">
+    <div className="space-y-4 sm:space-y-5 pb-8">
 
       {/* ── Page header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-100 leading-none">
+          <h1 className="text-lg sm:text-xl font-bold text-slate-100 leading-none">
             AI Prediction Dashboard
           </h1>
-          <p className="text-xs text-slate-500 mt-1.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-1.5">
             Single-model AI analysis across Equities, Commodities &amp; Crypto
           </p>
         </div>
 
         {/* Model badge (read-only — no selection) */}
-        <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl
                         bg-indigo-600/10 border border-indigo-500/20 self-start sm:self-auto">
           <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
           <span className="text-xs font-semibold text-indigo-300">MomentumNet v2</span>
@@ -97,7 +97,7 @@ export default function Prediction() {
       </div>
 
       {/* ── Summary stat pills ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         {[
           { label: "Total Signals", value: stats.total, color: "text-slate-100" },
           { label: "Bullish", value: stats.bull, color: "text-emerald-400" },
@@ -107,12 +107,12 @@ export default function Prediction() {
           <div
             key={label}
             className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)]
-                       rounded-xl px-4 py-3"
+                       rounded-xl px-3 sm:px-4 py-2.5 sm:py-3"
           >
-            <div className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">
+            <div className="text-[9px] sm:text-[10px] uppercase tracking-widest text-slate-500 font-semibold">
               {label}
             </div>
-            <div className={`text-2xl font-bold mt-1 tabular-nums ${color}`}>{value}</div>
+            <div className={`text-xl sm:text-2xl font-bold mt-1 tabular-nums ${color}`}>{value}</div>
           </div>
         ))}
       </div>

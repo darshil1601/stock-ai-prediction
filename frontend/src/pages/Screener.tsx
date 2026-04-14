@@ -25,15 +25,6 @@ function sortItems(items: MarketItem[], key: string, dir: "asc" | "desc"): Marke
   });
 }
 
-const TechnicalHealthBar = ({ rsi }: { rsi: number }) => {
-  const color = rsi > 70 ? "bg-rose-500" : rsi < 30 ? "bg-emerald-500" : "bg-sky-500";
-  return (
-    <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden">
-      <div className={`h-full ${color}`} style={{ width: `${rsi}%` }} />
-    </div>
-  );
-};
-
 export default function Screener() {
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
   const [sortKey, setSortKey] = useState<string>("rsi");
@@ -103,33 +94,33 @@ export default function Screener() {
   const overbought = marketsData.filter(d => d.rsi > 70).length;
 
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-5 sm:space-y-8 pb-12 sm:pb-16">
       <header>
-        <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-slate-800 pb-6 gap-6">
+        <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-slate-800 pb-4 sm:pb-6 gap-4 sm:gap-6">
           <div className="space-y-2">
-            <h1 className="text-3xl font-black text-white tracking-tight">Advanced Screener</h1>
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Advanced Screener</h1>
             <p className="text-slate-400 text-sm max-w-md italic">
               "Find pure momentum. Scan across Stocks, FX, and Crypto for the highest probability AI signals."
             </p>
           </div>
 
-          <div className="flex gap-4">
-             <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl min-w-[120px]">
+          <div className="flex gap-3 sm:gap-4">
+             <div className="bg-slate-900/80 border border-slate-800 p-2.5 sm:p-3 rounded-xl flex-1 sm:flex-none sm:min-w-[120px]">
                 <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Oversold (Buy)</p>
-                <p className="text-xl font-black text-emerald-400 tabular-nums">{oversold}</p>
+                <p className="text-lg sm:text-xl font-black text-emerald-400 tabular-nums">{oversold}</p>
              </div>
-             <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl min-w-[120px]">
+             <div className="bg-slate-900/80 border border-slate-800 p-2.5 sm:p-3 rounded-xl flex-1 sm:flex-none sm:min-w-[120px]">
                 <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Overbought (Sell)</p>
-                <p className="text-xl font-black text-rose-400 tabular-nums">{overbought}</p>
+                <p className="text-lg sm:text-xl font-black text-rose-400 tabular-nums">{overbought}</p>
              </div>
           </div>
         </div>
       </header>
 
       {/* Control Panel */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-6">
         <div className="xl:col-span-3">
-            <div className="bg-slate-800/20 border border-slate-700/30 rounded-3xl p-6 backdrop-blur-md">
+            <div className="bg-slate-800/20 border border-slate-700/30 rounded-xl sm:rounded-3xl p-3 sm:p-6 backdrop-blur-md">
                 <MarketFilters
                     filters={filters}
                     onChange={handleFilterChange}
@@ -141,7 +132,7 @@ export default function Screener() {
             </div>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-indigo-500/20 rounded-3xl p-6 hidden xl:block">
+        <div className="bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-indigo-500/20 rounded-xl sm:rounded-3xl p-4 sm:p-6 hidden xl:block">
             <h3 className="text-xs font-black text-indigo-300 uppercase tracking-widest mb-4">Screener Pro Tips</h3>
             <ul className="space-y-3 text-[11px] text-slate-400 leading-relaxed">
                 <li className="flex gap-2"><span className="text-indigo-400">●</span> Look for RSI under 30 with Strong Buy signals for reversals.</li>
@@ -152,7 +143,8 @@ export default function Screener() {
       </div>
 
       <div className="relative">
-         <div className="absolute -top-4 right-2 flex items-center gap-4 text-[10px] text-slate-500 bg-slate-950 px-2 py-1">
+         <div className="flex items-center gap-4 text-[10px] text-slate-500 mb-2 sm:mb-0
+                         sm:absolute sm:-top-4 sm:right-2 sm:bg-slate-950 sm:px-2 sm:py-1">
             <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Oversold</div>
             <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" /> Overbought</div>
          </div>

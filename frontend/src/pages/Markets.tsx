@@ -159,27 +159,27 @@ export default function Markets() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-5 sm:space-y-8 pb-12 sm:pb-16">
 
       {/* ══ PAGE HEADER ══════════════════════════════════════════════════════ */}
       <header>
-        <div className="flex items-start justify-between flex-wrap gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 mb-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold tracking-wider">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               LIVE MARKET DATA
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight leading-snug">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-100 tracking-tight leading-snug">
               Markets Dashboard
             </h1>
-            <p className="mt-1.5 text-sm text-slate-500 max-w-lg">
+            <p className="mt-1.5 text-xs sm:text-sm text-slate-500 max-w-lg">
               Real-time prices, AI-powered signals and risk metrics across
               Stocks, Indices, Commodities, Forex &amp; Crypto.
             </p>
           </div>
 
           {/* Right meta */}
-          <div className="flex items-center gap-4 pt-1">
+          <div className="flex items-center gap-3 sm:gap-4 pt-1 flex-wrap">
             <div className="text-right hidden sm:block">
               <p className="text-[11px] text-slate-600 uppercase tracking-widest font-medium">
                 Last Updated
@@ -192,7 +192,7 @@ export default function Markets() {
                 })}
               </p>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-row sm:flex-col gap-1.5 sm:gap-1">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-semibold">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 NSE / BSE Open
@@ -216,15 +216,15 @@ export default function Markets() {
 
       {/* ══ SECTION 2 — CATEGORY TABS ════════════════════════════════════════ */}
       <section aria-label="Market category selector">
-        <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 sm:mb-6">
           <MarketTabs
             selected={activeTab}
             onChange={handleTabChange}
             counts={tabCounts}
           />
 
-          {/* Subtle stat row */}
-          <div className="flex items-center gap-5 text-xs text-slate-600">
+          {/* Subtle stat row — hidden on mobile for cleaner look */}
+          <div className="hidden sm:flex items-center gap-5 text-xs text-slate-600">
             <span>
               <span className="text-slate-400 font-semibold">
                 {marketsData.length}
@@ -249,7 +249,7 @@ export default function Markets() {
         </div>
 
         {/* ══ SECTION 3 — SEARCH + FILTERS ═══════════════════════════════════ */}
-        <div className="bg-slate-800/30 border border-slate-700/40 rounded-2xl p-4 mb-4">
+        <div className="bg-slate-800/30 border border-slate-700/40 rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-4">
           <MarketFilters
             filters={filters}
             onChange={handleFilterChange}
