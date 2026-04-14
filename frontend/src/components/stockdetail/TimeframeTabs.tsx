@@ -21,10 +21,10 @@ function Tab({
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150 whitespace-nowrap ${
+      className={`px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-tight rounded-lg transition-all duration-150 whitespace-nowrap flex-shrink-0 ${
         isActive
-          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
-          : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25"
+          : "text-slate-500 hover:text-slate-200 hover:bg-slate-700/50"
       }`}
     >
       {label}
@@ -34,21 +34,21 @@ function Tab({
 
 export default function TimeframeTabs({ active, onChange }: Props) {
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
+    <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-none pb-0.5 sm:pb-0">
       {/* Intraday group */}
-      <div className="flex items-center gap-0.5 bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-xl p-1">
-        <span className="text-[10px] text-slate-600 px-1.5 font-medium uppercase tracking-wider">Intraday</span>
+      <div className="flex items-center gap-0.5 bg-slate-950/50 border border-slate-800 rounded-xl p-1 shrink-0">
+        <span className="text-[9px] text-slate-600 px-1.5 font-black uppercase tracking-widest hidden xs:block">Intra</span>
         {INTRADAY.map((tf) => (
           <Tab key={tf} label={tf} isActive={active === tf} onClick={() => onChange(tf)} />
         ))}
       </div>
 
-      {/* Divider */}
-      <div className="w-px h-6 bg-white/10" />
+      {/* Vertical Divider */}
+      <div className="w-px h-6 bg-slate-800 shrink-0 hidden sm:block" />
 
       {/* Swing / Long-term group */}
-      <div className="flex items-center gap-0.5 bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-xl p-1">
-        <span className="text-[10px] text-slate-600 px-1.5 font-medium uppercase tracking-wider">Swing</span>
+      <div className="flex items-center gap-0.5 bg-slate-950/50 border border-slate-800 rounded-xl p-1 shrink-0">
+        <span className="text-[9px] text-slate-600 px-1.5 font-black uppercase tracking-widest hidden xs:block">Swing</span>
         {SWING.map((tf) => (
           <Tab key={tf} label={tf} isActive={active === tf} onClick={() => onChange(tf)} />
         ))}

@@ -100,13 +100,13 @@ const MarketRow = memo(function MarketRow({ item, index }: MarketRowProps) {
       </td>
 
       {/* Symbol + Company */}
-      <td className="px-4 py-3.5">
+      <td className="px-2.5 sm:px-4 py-3 sm:py-3.5">
         <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-bold text-slate-100 tracking-wide group-hover:text-emerald-400 transition-colors duration-150">
+          <span className="text-xs sm:text-sm font-bold text-slate-100 tracking-wide group-hover:text-emerald-400 transition-colors duration-150">
             {item.symbol}
           </span>
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500 truncate max-w-[150px]">
+            <span className="text-[10px] sm:text-xs text-slate-500 truncate max-w-[100px] sm:max-w-[150px]">
               {item.company}
             </span>
             <span className="hidden sm:inline-flex px-1.5 py-px rounded text-[10px] font-medium bg-slate-700/60 text-slate-500 border border-slate-700/40 whitespace-nowrap shrink-0">
@@ -117,27 +117,27 @@ const MarketRow = memo(function MarketRow({ item, index }: MarketRowProps) {
       </td>
 
       {/* Price */}
-      <td className="px-4 py-3.5 text-right">
-        <span className="text-sm font-semibold text-slate-200 tabular-nums">
+      <td className="px-2.5 sm:px-4 py-3 sm:py-3.5 text-right">
+        <span className="text-xs sm:text-sm font-semibold text-slate-200 tabular-nums">
           {fmtPrice(item.price)}
         </span>
       </td>
 
       {/* Change % */}
-      <td className="px-4 py-3.5 text-right">
+      <td className="px-2.5 sm:px-4 py-3 sm:py-3.5 text-right">
         <span
           className={`
-            inline-flex items-center gap-0.5 text-sm font-semibold tabular-nums
+            inline-flex items-center gap-0.5 text-xs sm:text-sm font-semibold tabular-nums
             ${positive ? "text-emerald-400" : "text-rose-400"}
           `}
         >
-          <span className="text-xs leading-none">{positive ? "▲" : "▼"}</span>
+          <span className="text-[10px] sm:text-xs leading-none">{positive ? "▲" : "▼"}</span>
           {Math.abs(item.changePercent).toFixed(2)}%
         </span>
       </td>
 
-      {/* Volume */}
-      <td className="px-4 py-3.5 text-right">
+      {/* Volume — hidden on mobile */}
+      <td className="px-2.5 sm:px-4 py-3 sm:py-3.5 text-right hidden sm:table-cell">
         <span className="text-sm text-slate-400 tabular-nums">
           {fmtVolume(item.volume)}
         </span>
@@ -170,12 +170,12 @@ const MarketRow = memo(function MarketRow({ item, index }: MarketRowProps) {
         </div>
       </td>
 
-      {/* AI Signal */}
-      <td className="px-4 py-3.5">
+      {/* AI Signal — hidden on mobile */}
+      <td className="px-2.5 sm:px-4 py-3 sm:py-3.5 hidden sm:table-cell">
         <span
           className={`
-            inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
-            text-xs font-semibold whitespace-nowrap
+            inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full
+            text-[10px] sm:text-xs font-semibold whitespace-nowrap
             ${SIGNAL_STYLES[item.aiSignal]}
           `}
         >
@@ -188,8 +188,8 @@ const MarketRow = memo(function MarketRow({ item, index }: MarketRowProps) {
       </td>
 
       {/* Arrow CTA */}
-      <td className="px-4 py-3.5 text-right w-10">
-        <span className="text-slate-700 group-hover:text-slate-400 transition-colors duration-150 text-lg leading-none">
+      <td className="px-2 sm:px-4 py-3 sm:py-3.5 text-right w-8 sm:w-10">
+        <span className="text-slate-700 group-hover:text-slate-400 transition-colors duration-150 text-base sm:text-lg leading-none">
           →
         </span>
       </td>

@@ -8,7 +8,6 @@ const SentimentBar = memo(({ value }: { value: number }) => {
   useEffect(() => {
     const el = barRef.current;
     if (!el) return;
-    // Animate width from 0 → value%
     el.style.width = "0%";
     const raf = requestAnimationFrame(() => {
       el.style.transition = "width 1.4s cubic-bezier(0.22, 1, 0.36, 1)";
@@ -20,7 +19,7 @@ const SentimentBar = memo(({ value }: { value: number }) => {
   return (
     <div className="relative">
       {/* Track */}
-      <div className="h-3 w-full bg-slate-700/60 rounded-full overflow-hidden">
+      <div className="h-2.5 sm:h-3 w-full bg-slate-800 rounded-full overflow-hidden shadow-inner">
         {/* Fill */}
         <div
           ref={barRef}
@@ -34,10 +33,10 @@ const SentimentBar = memo(({ value }: { value: number }) => {
       </div>
 
       {/* Tick marks */}
-      <div className="flex justify-between mt-1.5 text-[10px] text-slate-500">
-        <span>0% Bearish</span>
-        <span>50 Neutral</span>
-        <span>100% Bullish</span>
+      <div className="flex justify-between mt-2 text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-tighter">
+        <span>Bearish Fear</span>
+        <span className="opacity-50">50/50</span>
+        <span>Bullish Greed</span>
       </div>
     </div>
   );
@@ -50,10 +49,10 @@ function SentimentPill({ value }: { value: number }) {
   return (
     <span
       className={`
-        inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold
+        inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold
         ${bullish
-          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
-          : "bg-rose-500/15 text-rose-400 border border-rose-500/25"
+          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+          : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
         }
       `}
     >
@@ -72,43 +71,49 @@ export default function AISentimentCard() {
   const { bullishPercent, label, description } = aiSentiment;
 
   return (
-    <section aria-label="AI Market Sentiment">
+    <section aria-label="AI Market Sentiment" className="relative group">
+      {/* Background Glow */}
+      <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-2xl blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200" />
+      
       <div
         className="
           relative overflow-hidden
-          bg-gradient-to-br from-slate-800/80 via-slate-800/60 to-emerald-900/20
-          border border-slate-700/50 rounded-2xl p-6
-          backdrop-blur-sm
+          bg-[#0b1220]/95 backdrop-blur-md
+          border border-slate-800 rounded-2xl p-5 sm:p-7
         "
       >
         {/* Decorative glow blob */}
         <div
           className="
             pointer-events-none absolute -top-16 -right-16 w-64 h-64
-            bg-emerald-500/8 rounded-full blur-3xl
+            bg-emerald-400/5 rounded-full blur-3xl
           "
         />
 
-        <div className="relative z-10">
+        <div className="relative z-10 space-y-5">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <p className="text-xs font-medium text-slate-400 tracking-widest uppercase">
-                AI Market Sentiment
+              <p className="text-[10px] sm:text-xs font-black text-slate-500 tracking-widest uppercase">
+                AI Market Intelligence
               </p>
-              <h3 className="mt-1 text-2xl font-bold text-slate-100">
-                Today's Outlook ·{" "}
+              <h3 className="mt-1 text-xl sm:text-2xl font-black text-slate-100 leading-tight">
+                Global Context ·{" "}
                 <span className="text-emerald-400">{label}</span>
               </h3>
             </div>
-            <SentimentPill value={bullishPercent} />
+            <div className="self-start sm:self-center">
+                <SentimentPill value={bullishPercent} />
+            </div>
           </div>
 
           {/* Bar */}
-          <SentimentBar value={bullishPercent} />
+          <div className="py-1">
+             <SentimentBar value={bullishPercent} />
+          </div>
 
           {/* Description */}
-          <p className="mt-4 text-sm text-slate-400 leading-relaxed max-w-2xl">
+          <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-2xl font-medium">
             {description}
           </p>
         </div>

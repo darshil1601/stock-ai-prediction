@@ -67,45 +67,28 @@ const SymbolInfoWidget = memo(function SymbolInfoWidget({ symbol }: { symbol: st
     };
   }, [tvSymbol]);
 
-  const isGold = symbol === "GOLD";
-  const isBTC  = symbol === "BTC";
+  const isGold = symbol === "GOLD" || symbol === "XAUUSD";
+  const isBTC  = symbol.toUpperCase().includes("BTC");
 
   return (
     <div
-      style={{
-        background: isGold
-          ? "linear-gradient(135deg, rgba(17,25,46,0.98) 0%, rgba(11,16,32,1) 70%, rgba(28,22,8,0.5) 100%)"
+      className={`
+        relative overflow-hidden rounded-2xl p-5 sm:p-7 border
+        ${isGold 
+          ? "border-amber-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/20" 
           : isBTC
-          ? "linear-gradient(135deg, rgba(17,25,46,0.98) 0%, rgba(11,16,32,1) 70%, rgba(30,18,6,0.5) 100%)"
-          : "linear-gradient(135deg, rgba(17,25,46,0.98) 0%, rgba(11,16,32,1) 70%, rgba(15,23,42,0.8) 100%)",
-        border: isGold
-          ? "1px solid rgba(245,158,11,0.14)"
-          : isBTC
-          ? "1px solid rgba(249,115,22,0.18)"
-          : "1px solid rgba(59,130,246,0.14)",
-        borderRadius: 16,
-        padding: "22px 28px",
-        position: "relative",
-        overflow: "hidden",
-      }}
+            ? "border-orange-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-orange-950/20"
+            : "border-blue-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/20"
+        }
+      `}
     >
       <span
-        style={{
-          position: "absolute",
-          top: -50,
-          right: -50,
-          width: 200,
-          height: 200,
-          borderRadius: "50%",
-          background: isGold
-            ? "radial-gradient(circle, rgba(251,191,36,0.09) 0%, transparent 70%)"
-            : isBTC
-            ? "radial-gradient(circle, rgba(249,115,22,0.12) 0%, transparent 70%)"
-            : "radial-gradient(circle, rgba(59,130,246,0.09) 0%, transparent 70%)",
-          pointerEvents: "none",
-        }}
+        className={`
+          absolute -top-12 -right-12 w-48 h-48 rounded-full blur-3xl pointer-events-none opacity-40
+          ${isGold ? "bg-amber-500/20" : isBTC ? "bg-orange-500/20" : "bg-blue-500/20"}
+        `}
       />
-      <div ref={containerRef} style={{ width: "100%" }} />
+      <div ref={containerRef} className="w-full relative z-10" />
     </div>
   );
 });
@@ -117,11 +100,8 @@ export default function StockDetail() {
   const stock = allAssets.find((s) => s.symbol === sym);
 
   const [activeTimeframe, setActiveTimeframe] = useState<Timeframe>("1D");
-  // Typed payload — no more `any`. Set by AIPredictionChart when API responds.
   const [apiPayload, setApiPayload] = useState<PredictionPayload | null>(null);
 
-  // Use API data if available; show nothing (or a loading state) if not.
-  // We deliberately do NOT show dummy/generated data for financial information.
   const activeEntryExit = apiPayload?.entry_exit_zones ?? null;
   const activeRiskMetrics = apiPayload?.risk_metrics ?? null;
 
@@ -131,9 +111,9 @@ export default function StockDetail() {
   }, [sym]);
 
   return (
-    <div className="space-y-5 pb-8">
+    <div className="space-y-6 sm:space-y-8 pb-12 px-1 sm:px-0">
 
-      {/* ① Header — GOLD/EURUSD/BTC variants get realtime TradingView Symbol Info widget */}
+      {/* ① Header */}
       {isSupportedAsset ? (
         <SymbolInfoWidget symbol={sym} />
       ) : (
@@ -158,9 +138,9 @@ export default function StockDetail() {
         onApiData={setApiPayload}
       />
 
-      {/* ④ Entry/Exit + Risk — only shown when live API data is available */}
+      {/* ④ Entry/Exit + Risk */}
       {activeEntryExit && activeRiskMetrics ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
           <EntryExitCard
             zones={activeEntryExit}
             currency={(sym === "GOLD" || sym === "XAUUSD" || sym === "EURUSD" || sym.includes("BTC")) ? "USD" : "INR"}
@@ -171,13 +151,12 @@ export default function StockDetail() {
           />
         </div>
       ) : (
-        // Loading/error state — never show fake financial data
         !apiPayload && isSupportedAsset && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {[0, 1].map((i) => (
-              <div key={i} className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 animate-pulse">
-                <div className="h-4 w-32 bg-white/5 rounded mb-4" />
-                <div className="h-20 bg-white/5 rounded" />
+              <div key={i} className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 sm:p-8 animate-pulse shadow-xl">
+                <div className="h-4 w-32 bg-slate-800 rounded mb-6" />
+                <div className="h-24 bg-slate-800 rounded" />
               </div>
             ))}
           </div>
@@ -186,7 +165,7 @@ export default function StockDetail() {
 
       {/* ⑤ Audit History */}
       {isSupportedAsset && (
-        <div id="performance-audit">
+        <div id="performance-audit" className="pt-4">
           <PredictionHistory symbol={sym} />
         </div>
       )}

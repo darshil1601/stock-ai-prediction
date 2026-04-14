@@ -37,7 +37,7 @@ const Select = ({
     value={value}
     onChange={(e) => onChange(e.target.value)}
     className="
-      h-9 px-3 pr-8 rounded-lg text-sm text-slate-300
+      h-9 w-full sm:w-auto px-3 pr-8 rounded-lg text-sm text-slate-300
       bg-slate-800/80 border border-slate-700/60
       hover:border-slate-600/80 focus:border-emerald-500/60
       focus:outline-none focus:ring-1 focus:ring-emerald-500/30
@@ -66,9 +66,9 @@ const MarketFilters = memo(function MarketFilters({
   return (
     <div className="space-y-3">
       {/* ── Top row: Search + Quick signal chips ─────────────────── */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         {/* Search */}
-        <div className="relative flex-1 min-w-[220px] max-w-sm">
+        <div className="relative w-full sm:flex-1 sm:max-w-sm">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -102,7 +102,7 @@ const MarketFilters = memo(function MarketFilters({
         </div>
 
         {/* AI Signal quick-filter chips */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 sm:pb-0">
           {(
             [
               { label: "All Signals",  value: "",            activeClass: "bg-slate-700 border-slate-500 text-slate-100" },
@@ -120,7 +120,7 @@ const MarketFilters = memo(function MarketFilters({
                 id={`signal-chip-${label.replace(/\s+/g, "-").toLowerCase()}`}
                 onClick={() => onChange({ signalFilter: value })}
                 className={`
-                  px-2.5 py-1 rounded-lg text-xs font-semibold border
+                  px-2.5 py-1.5 rounded-lg text-xs font-semibold border flex-shrink-0
                   transition-all duration-150 whitespace-nowrap
                   ${
                     active
@@ -136,7 +136,7 @@ const MarketFilters = memo(function MarketFilters({
         </div>
 
         {/* Results count */}
-        <p className="ml-auto text-xs text-slate-500 tabular-nums whitespace-nowrap">
+        <p className="text-xs text-slate-500 tabular-nums whitespace-nowrap sm:ml-auto">
           Showing{" "}
           <span className="text-slate-300 font-medium">{filteredCount}</span>{" "}
           of {totalCount}
@@ -144,7 +144,7 @@ const MarketFilters = memo(function MarketFilters({
       </div>
 
       {/* ── Bottom row: Dropdown filters ─────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2">
         {/* Sector */}
         {sectors.length > 0 && (
           <Select
@@ -162,7 +162,7 @@ const MarketFilters = memo(function MarketFilters({
         )}
 
         {/* Price range */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 col-span-2 sm:col-span-1">
           <input
             id="filter-price-min"
             type="number"
@@ -170,7 +170,7 @@ const MarketFilters = memo(function MarketFilters({
             value={filters.priceMin}
             onChange={(e) => onChange({ priceMin: e.target.value })}
             className="
-              h-9 w-28 px-3 rounded-lg text-sm text-slate-300
+              h-9 w-full sm:w-28 px-3 rounded-lg text-sm text-slate-300
               bg-slate-800/80 border border-slate-700/60
               placeholder-slate-600
               hover:border-slate-600/80 focus:border-emerald-500/60
@@ -178,7 +178,7 @@ const MarketFilters = memo(function MarketFilters({
               transition-colors duration-150
             "
           />
-          <span className="text-slate-600 text-xs">–</span>
+          <span className="text-slate-600 text-xs flex-shrink-0">–</span>
           <input
             id="filter-price-max"
             type="number"
@@ -186,7 +186,7 @@ const MarketFilters = memo(function MarketFilters({
             value={filters.priceMax}
             onChange={(e) => onChange({ priceMax: e.target.value })}
             className="
-              h-9 w-28 px-3 rounded-lg text-sm text-slate-300
+              h-9 w-full sm:w-28 px-3 rounded-lg text-sm text-slate-300
               bg-slate-800/80 border border-slate-700/60
               placeholder-slate-600
               hover:border-slate-600/80 focus:border-emerald-500/60
@@ -247,7 +247,7 @@ const MarketFilters = memo(function MarketFilters({
               })
             }
             className="
-              h-9 px-3 rounded-lg text-xs font-medium
+              h-9 px-3 rounded-lg text-xs font-medium col-span-2 sm:col-span-1
               text-rose-400 border border-rose-500/30
               hover:bg-rose-500/10 hover:border-rose-500/50
               transition-all duration-150

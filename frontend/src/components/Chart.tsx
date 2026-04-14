@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import { getFormattedSymbol } from "../lib/utils";
 
 type ChartProps = {
@@ -9,86 +9,93 @@ export default function Chart({ symbol }: ChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetRef = useRef<any>(null);
 
-  useEffect(() => {
+  const buildWidget = useCallback(() => {
     if (!containerRef.current) return;
+    const root = containerRef.current;
 
-    const container = containerRef.current;
-    // clear previous
-    container.innerHTML = "";
+    // Tear down previous widget
+    try {
+      if (widgetRef.current?.remove) widgetRef.current.remove();
+    } catch (_) {}
+    root.innerHTML = "";
 
     const containerId = `tv-advanced-${Date.now()}`;
     const node = document.createElement("div");
     node.id = containerId;
-    node.style.width = "100%";
-    node.style.height = "500px";
-    container.appendChild(node);
+    
+    // Responsive height logic: 350px on mobile, 500px on desktop
+    const h = window.innerWidth < 640 ? 350 : 500;
+    node.style.cssText = `width:100%; height:${h}px;`;
+    root.appendChild(node);
 
     const formatted = getFormattedSymbol(symbol || "");
 
-    function createWidget() {
-      try {
-        // @ts-ignore
-        widgetRef.current = new (window as any).TradingView.widget({
-          container_id: containerId,
-          symbol: formatted,
-          interval: "30",
-          timezone: "Etc/UTC",
-          theme: "dark",
-          style: "1",
-          locale: "en",
-          autosize: true,
-          hide_top_toolbar: false,
-          hide_side_toolbar: false,
-          toolbar_bg: "#0b1220",
-          enable_publishing: false,
-          allow_symbol_change: false,
-          studies_overrides: {},
-          withdateranges: true,
-        });
-      } catch (err) {
-        // console.warn('TradingView widget init failed', err)
-      }
-    }
+    try {
+      // @ts-ignore
+      widgetRef.current = new (window as any).TradingView.widget({
+        container_id:      containerId,
+        symbol:            formatted,
+        interval:          "30",
+        timezone:          "Etc/UTC",
+        theme:             "dark",
+        style:             "1",          // candlestick
+        locale:            "en",
+        width:             "100%",
+        height:            h,
+        autosize:          true,
+        hide_top_toolbar:  window.innerWidth < 640,
+        hide_side_toolbar: window.innerWidth < 640,
+        toolbar_bg:        "#0b1220",
+        enable_publishing: false,
+        allow_symbol_change: false,
+        withdateranges:    true,
+        backgroundColor:   "#0b1220",
+      });
+    } catch (err) {}
+  }, [symbol]);
 
+  useEffect(() => {
     const scriptId = "tradingview-tv-js";
+
     if ((window as any).TradingView) {
-      createWidget();
+      buildWidget();
     } else if (!document.getElementById(scriptId)) {
-      const s = document.createElement("script");
-      s.id = scriptId;
-      s.src = "https://s3.tradingview.com/tv.js";
-      s.async = true;
-      s.onload = () => {
-        createWidget();
-      };
+      const s   = document.createElement("script");
+      s.id      = scriptId;
+      s.src     = "https://s3.tradingview.com/tv.js";
+      s.async   = true;
+      s.onload  = buildWidget;
       document.body.appendChild(s);
     } else {
-      // script present but TradingView not ready yet - try to wait
-      const tryInit = () => {
-        if ((window as any).TradingView) return createWidget();
-        setTimeout(tryInit, 200);
+      const poll = () => {
+        if ((window as any).TradingView) { buildWidget(); return; }
+        setTimeout(poll, 200);
       };
-      tryInit();
+      poll();
     }
 
+    // Handle window resize to adjust height
+    let resizeTimer: any;
+    const handleResize = () => {
+       clearTimeout(resizeTimer);
+       resizeTimer = setTimeout(buildWidget, 500);
+    };
+    window.addEventListener('resize', handleResize);
+
     return () => {
-      // remove widget instance if possible
+      window.removeEventListener('resize', handleResize);
       try {
-        if (
-          widgetRef.current &&
-          typeof widgetRef.current.remove === "function"
-        ) {
+        if (widgetRef.current && typeof widgetRef.current.remove === "function") {
           widgetRef.current.remove();
         }
       } catch (_) {}
-      // clear DOM
-      if (container && container.firstChild) {
-        container.innerHTML = "";
-      }
+      if (containerRef.current) containerRef.current.innerHTML = "";
     };
-  }, [symbol]);
+  }, [buildWidget]);
 
   return (
-    <div ref={containerRef} className="w-full rounded-xl overflow-hidden" />
+    <div className="bg-[#0b1220] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative">
+       <div ref={containerRef} className="w-full relative" style={{ minHeight: "350px" }} />
+    </div>
   );
 }

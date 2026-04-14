@@ -78,21 +78,21 @@ function EmptyState() {
 export default function PredictionTable({ items, sortKey, sortDir, onSort }: Props) {
   return (
     <div className="bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)]
-                    rounded-2xl overflow-hidden">
+                    rounded-xl sm:rounded-2xl overflow-hidden">
 
       {/* Scrollable wrapper so sticky header actually sticks */}
       <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-        <table className="w-full min-w-[640px] border-collapse">
+        <table className="w-full min-w-[520px] border-collapse">
 
           {/* ── Sticky header ── */}
           <thead className="sticky top-0 z-10 bg-[#0b1220]
                             border-b border-[rgba(255,255,255,0.05)]">
             <tr>
-              <th className="pl-5 py-3 w-10" />
+              <th className="pl-3 sm:pl-5 py-3 w-8 sm:w-10" />
 
-              <ColHeader label="Stock"       className="pl-0 pr-4" />
+              <ColHeader label="Stock"       className="pl-0 pr-2 sm:pr-4" />
 
-              <ColHeader label="Trend"       className="pr-4" />
+              <ColHeader label="Trend"       className="pr-2 sm:pr-4" />
 
               <ColHeader
                 label="Probability"
@@ -100,10 +100,10 @@ export default function PredictionTable({ items, sortKey, sortDir, onSort }: Pro
                 active={sortKey === "probability"}
                 dir={sortDir}
                 onClick={() => onSort("probability")}
-                className="pr-6"
+                className="pr-3 sm:pr-6"
               />
 
-              <ColHeader label="Target"      className="pr-4" />
+              <ColHeader label="Target"      className="pr-2 sm:pr-4 hidden sm:table-cell" />
 
               <ColHeader
                 label="Risk"
@@ -111,10 +111,10 @@ export default function PredictionTable({ items, sortKey, sortDir, onSort }: Pro
                 active={sortKey === "risk"}
                 dir={sortDir}
                 onClick={() => onSort("risk")}
-                className="pr-5"
+                className="pr-3 sm:pr-5"
               />
 
-              <th className="pr-5 w-6" />
+              <th className="pr-3 sm:pr-5 w-6" />
             </tr>
           </thead>
 
@@ -133,14 +133,14 @@ export default function PredictionTable({ items, sortKey, sortDir, onSort }: Pro
 
       {/* Footer count */}
       {items.length > 0 && (
-        <div className="px-5 py-3 border-t border-[rgba(255,255,255,0.04)]
-                        flex items-center justify-between">
-          <span className="text-xs text-slate-600">
+        <div className="px-3 sm:px-5 py-2.5 sm:py-3 border-t border-[rgba(255,255,255,0.04)]
+                        flex items-center justify-between gap-2">
+          <span className="text-[10px] sm:text-xs text-slate-600">
             Powered by{" "}
             <span className="text-indigo-400 font-semibold">MomentumNet v2</span>
             {" "}· Single-model architecture
           </span>
-          <span className="text-xs text-slate-600 tabular-nums">
+          <span className="text-[10px] sm:text-xs text-slate-600 tabular-nums flex-shrink-0">
             {items.length} result{items.length !== 1 ? "s" : ""}
           </span>
         </div>

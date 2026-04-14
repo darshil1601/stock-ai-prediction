@@ -7,7 +7,7 @@ interface ColDef {
   key: string;
   label: string;
   align: "left" | "right";
-  hidden?: "md" | "lg";
+  hidden?: "sm" | "md" | "lg";
   sortable?: boolean;
 }
 
@@ -15,10 +15,10 @@ const COLUMNS: ColDef[] = [
   { key: "symbol",      label: "Symbol / Company",  align: "left"  },
   { key: "price",       label: "Price",             align: "right", sortable: true },
   { key: "change",      label: "Change %",          align: "right", sortable: true },
-  { key: "volume",      label: "Volume",            align: "right", sortable: true },
+  { key: "volume",      label: "Volume",            align: "right", sortable: true, hidden: "sm" },
   { key: "marketCap",   label: "Market Cap",        align: "right", sortable: true, hidden: "lg" },
   { key: "rsi",         label: "RSI",               align: "right", sortable: true, hidden: "md" },
-  { key: "aiSignal",    label: "AI Signal",         align: "left"  },
+  { key: "aiSignal",    label: "AI Signal",         align: "left",  hidden: "sm" },
   { key: "_arrow",      label: "",                  align: "right" },
 ];
 
@@ -34,9 +34,7 @@ function SortIcon({ dir }: { dir: "asc" | "desc" | null }) {
   }
   return (
     <span
-      className={`text-[10px] leading-none ${
-        dir === "asc" ? "text-emerald-400" : "text-emerald-400"
-      }`}
+      className="text-[10px] leading-none text-emerald-400"
     >
       {dir === "asc" ? "▲" : "▼"}
     </span>
@@ -78,7 +76,7 @@ const MarketTable = memo(function MarketTable({
   onSort,
 }: MarketTableProps) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-900/60 backdrop-blur-sm">
+    <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-slate-700/50 bg-slate-900/60 backdrop-blur-sm">
 
       {/* ── Gradient top accent stripe ──────────────────────────── */}
       <div className="h-px w-full bg-gradient-to-r from-emerald-500/40 via-teal-500/30 to-transparent" />
@@ -86,7 +84,7 @@ const MarketTable = memo(function MarketTable({
       <div className="overflow-x-auto max-h-[640px] overflow-y-auto">
         <table
           role="grid"
-          className="w-full text-left border-collapse"
+          className="w-full text-left border-collapse min-w-[480px]"
           aria-label="Market data table"
         >
           {/* ── Head (sticky) ───────────────────────────────────── */}
@@ -102,6 +100,8 @@ const MarketTable = memo(function MarketTable({
                     ? "hidden lg:table-cell"
                     : col.hidden === "md"
                     ? "hidden md:table-cell"
+                    : col.hidden === "sm"
+                    ? "hidden sm:table-cell"
                     : "";
 
                 return (
@@ -109,8 +109,8 @@ const MarketTable = memo(function MarketTable({
                     key={col.key}
                     scope="col"
                     className={`
-                      px-4 py-3
-                      text-[11px] font-semibold uppercase tracking-widest
+                      px-2.5 sm:px-4 py-3
+                      text-[10px] sm:text-[11px] font-semibold uppercase tracking-widest
                       text-slate-500 select-none
                       ${col.align === "right" ? "text-right" : "text-left"}
                       ${hiddenClass}
@@ -157,13 +157,14 @@ const MarketTable = memo(function MarketTable({
 
       {/* ── Footer ─────────────────────────────────────────────── */}
       {items.length > 0 && (
-        <div className="px-4 py-2.5 border-t border-slate-800/60 bg-slate-900/50 flex items-center justify-between">
-          <p className="text-xs text-slate-600 tabular-nums">
+        <div className="px-3 sm:px-4 py-2.5 border-t border-slate-800/60 bg-slate-900/50
+                        flex items-center justify-between gap-2">
+          <p className="text-[10px] sm:text-xs text-slate-600 tabular-nums">
             <span className="text-slate-500 font-medium">{items.length}</span>{" "}
             instrument{items.length !== 1 ? "s" : ""} &nbsp;·&nbsp; Click any
             row to open full analysis
           </p>
-          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600/70 font-medium">
+          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600/70 font-medium flex-shrink-0">
             <span className="w-1 h-1 rounded-full bg-emerald-500/60 animate-pulse" />
             AI Signals Active
           </span>
@@ -174,4 +175,3 @@ const MarketTable = memo(function MarketTable({
 });
 
 export default MarketTable;
-
