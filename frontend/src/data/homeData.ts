@@ -1,5 +1,5 @@
 import type { Asset } from "../types/stock";
-import type { MarketIndex, AISentiment, AIPick } from "../types/home";
+import type { MarketIndex, AISentiment } from "../types/home";
 
 // ─── Market Overview Cards ────────────────────────────────────────────────────
 export const marketIndices: MarketIndex[] = [
@@ -228,66 +228,3 @@ export const assets: Asset[] = [
 
 export const allAssets = assets;
 
-// ─── Featured AI Picks ────────────────────────────────────────────────────────
-export const aiPicks: AIPick[] = [
-  {
-    symbol: "TCS",
-    name: "Tata Consultancy Services",
-    signal: "Strong Buy",
-    confidence: 91,
-    risk: "Low",
-    price: 3_456.12,
-    change: 3.42,
-    sparkline: [3380, 3400, 3390, 3420, 3410, 3440, 3450, 3456],
-  },
-  {
-    symbol: "BTC",
-    name: "Bitcoin",
-    signal: "Buy",
-    confidence: 78,
-    risk: "High",
-    price: 71_413,
-    change: -3.40,
-    sparkline: [73928, 73600, 73200, 72800, 72400, 72000, 71600, 71413],
-  },
-  {
-    symbol: "GOLD",
-    name: "Gold",
-    signal: "Buy",
-    confidence: 83,
-    risk: "Low",
-    price: 5183.5,
-    change: 1.12,
-    sparkline: [5160, 5165, 5172, 5175, 5178, 5180, 5182, 5183.5],
-  },
-  {
-    symbol: "RELIANCE",
-    name: "Reliance Industries",
-    signal: "Hold",
-    confidence: 65,
-    risk: "Medium",
-    price: 2_915.0,
-    change: 1.45,
-    sparkline: [2870, 2880, 2875, 2890, 2900, 2905, 2910, 2915],
-  },
-  {
-    symbol: "SOLUSDT",
-    name: "Solana",
-    signal: "Strong Buy",
-    confidence: 87,
-    risk: "High",
-    price: 102.45,
-    change: 3.12,
-    sparkline: [99, 99.5, 100, 100.8, 101.2, 101.8, 102.1, 102.45],
-  },
-  {
-    symbol: "EURUSD",
-    name: "Euro / U.S. Dollar",
-    signal: "Hold",
-    confidence: 60,
-    risk: "High",
-    price: 1.1421,
-    change: -0.25,
-    sparkline: [1.16, 1.155, 1.158, 1.152, 1.15, 1.148, 1.145, 1.142],
-  },
-];

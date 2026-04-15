@@ -14,6 +14,7 @@ def train_all_symbols():
     print(f"  AI SELF-LEARNING CORE: Full Retrain Commencing...")
     print(f"{'#'*60}")
 
+    failures: list[str] = []
     for sym in SYMBOLS:
         try:
             print(f"\n[Retrain] Learning new patterns for: {sym}")
@@ -23,6 +24,10 @@ def train_all_symbols():
             print(f"[FAILED] Training result for {sym} - {e}")
             import traceback
             traceback.print_exc()
+            failures.append(sym)
+
+    if failures:
+        raise RuntimeError(f"Training failed for: {', '.join(failures)}")
 
     print(f"\n{'='*60}")
     print(f"  Retrain complete. AI successfully updated for new market regime.")
