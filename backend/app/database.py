@@ -5,12 +5,16 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
-from app.services.asset_profile import get_asset_profile
+from app.services.asset_profile import (
+    format_prediction_target,
+    get_asset_profile,
+    parse_candle_timestamp,
+)
 
 load_dotenv()
 
@@ -48,6 +52,52 @@ def __getattr__(name: str) -> Client:
     if name == "supabase":
         return get_supabase()
     raise AttributeError(f"module {__name__} has no attribute {name}")
+
+
+def _parse_iso_timestamp(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    text = str(raw).strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _estimate_target_timestamp(row: dict, profile) -> datetime | None:
+    if profile.history_interval != "1day":
+        created_at = _parse_iso_timestamp(row.get("created_at"))
+        if not created_at:
+            return None
+        base = created_at.replace(minute=0, second=0, microsecond=0)
+        return base + profile.target_step
+
+    raw_predicted_for = row.get("predicted_for")
+    if not raw_predicted_for:
+        return None
+    try:
+        target_day = datetime.strptime(str(raw_predicted_for), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+    close_hour = profile.market_close_hour_utc if profile.market_close_hour_utc is not None else 22
+    close_minute = profile.market_close_minute_utc if profile.market_close_minute_utc is not None else 0
+    return datetime.combine(target_day, time(close_hour, close_minute), tzinfo=timezone.utc)
+
+
+def _first_close_at_or_after(
+    candles: list[tuple[datetime, float]],
+    target_timestamp: datetime,
+) -> float | None:
+    for ts, close in candles:
+        if ts >= target_timestamp:
+            return close
+    return None
 
 
 def save_market_prices(symbol: str, records: list[dict]):
@@ -122,11 +172,19 @@ def get_predictions(symbol: str = "XAU/USD", limit: int = 60):
             .table("predictions")
             .select("*")
             .eq("symbol", symbol)
-            .order("predicted_for", desc=True)
+            .order("created_at", desc=True)
             .limit(limit)
             .execute()
         )
-        return resp.data or []
+        rows = resp.data or []
+        profile = get_asset_profile(symbol)
+        for row in rows:
+            target_ts = _estimate_target_timestamp(row, profile)
+            if not target_ts:
+                continue
+            row["prediction_target_time"] = target_ts.isoformat()
+            row["prediction_target_display"] = format_prediction_target(symbol, target_ts)
+        return rows
     except Exception as exc:
         logger.error("[DB] get_predictions failed: %s", exc)
         return []
@@ -135,10 +193,12 @@ def get_predictions(symbol: str = "XAU/USD", limit: int = 60):
 def get_average_accuracy(symbol: str = "XAU/USD", days: int = 30, min_records: int = 5) -> float | None:
     """Mean accuracy (100 - abs(diff%)) for recent reconciled records or None if insufficient."""
     try:
+        profile = get_asset_profile(symbol)
+        now_utc = datetime.now(timezone.utc)
         resp = (
             get_supabase()
             .table("predictions")
-            .select("predicted_price, actual_price")
+            .select("predicted_price, actual_price, predicted_for, created_at")
             .eq("symbol", symbol)
             .not_.is_("actual_price", "null")
             .order("created_at", desc=True)
@@ -148,6 +208,10 @@ def get_average_accuracy(symbol: str = "XAU/USD", days: int = 30, min_records: i
         data = resp.data or []
         errors: list[float] = []
         for row in data:
+            if profile.asset_class == "crypto":
+                target_ts = _estimate_target_timestamp(row, profile)
+                if not target_ts or target_ts > now_utc:
+                    continue
             predicted = row.get("predicted_price")
             actual = row.get("actual_price")
             if actual and float(actual) > 0:
@@ -173,7 +237,7 @@ def reconcile_predictions():
         resp = (
             get_supabase()
             .table("predictions")
-            .select("id, predicted_for, symbol")
+            .select("id, predicted_for, symbol, created_at")
             .is_("actual_price", "null")
             .execute()
         )
@@ -190,29 +254,52 @@ def reconcile_predictions():
             profile = get_asset_profile(symbol)
 
             if profile.asset_class == "crypto":
-                cutoff_date = today_utc
+                grouped[symbol].append(pred)
             else:
                 markets_closed_today = (now_utc.hour + now_utc.minute / 60.0) >= 22.5
                 cutoff_date = today_utc if markets_closed_today else yesterday_utc
-
-            if pred["predicted_for"] <= cutoff_date:
-                grouped[symbol].append(pred)
+                if pred["predicted_for"] <= cutoff_date:
+                    grouped[symbol].append(pred)
 
         for symbol, preds in grouped.items():
             try:
                 profile = get_asset_profile(symbol)
-                outputsize = 240 if profile.history_interval != "1day" else 60
+                outputsize = 720 if profile.history_interval != "1day" else 60
                 df = fetch_historical_data(symbol, outputsize=outputsize)
 
-                price_map: dict[str, float] = {}
-                for _, row in df.iterrows():
-                    key = str(row["date"])[:10]
-                    price_map[key] = float(row["close"])
+                if profile.asset_class == "crypto":
+                    candles: list[tuple[datetime, float]] = []
+                    for _, row in df.iterrows():
+                        try:
+                            ts = parse_candle_timestamp(row["date"])
+                        except Exception:
+                            continue
+                        candles.append((ts.astimezone(timezone.utc), float(row["close"])))
 
-                for pred in preds:
-                    actual = price_map.get(pred["predicted_for"])
-                    if actual is not None:
-                        get_supabase().table("predictions").update({"actual_price": actual}).eq("id", pred["id"]).execute()
+                    if not candles:
+                        continue
+
+                    for pred in preds:
+                        target_ts = _estimate_target_timestamp(pred, profile)
+                        if not target_ts:
+                            continue
+                        ready_at = target_ts + timedelta(minutes=profile.candle_confirmation_buffer_minutes)
+                        if ready_at > now_utc:
+                            continue
+
+                        actual = _first_close_at_or_after(candles, target_ts)
+                        if actual is not None:
+                            get_supabase().table("predictions").update({"actual_price": actual}).eq("id", pred["id"]).execute()
+                else:
+                    price_map: dict[str, float] = {}
+                    for _, row in df.iterrows():
+                        key = str(row["date"])[:10]
+                        price_map[key] = float(row["close"])
+
+                    for pred in preds:
+                        actual = price_map.get(pred["predicted_for"])
+                        if actual is not None:
+                            get_supabase().table("predictions").update({"actual_price": actual}).eq("id", pred["id"]).execute()
             except Exception as exc:
                 logger.error("[Audit] Partial failure for %s: %s", symbol, exc)
 

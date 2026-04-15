@@ -17,15 +17,19 @@ _last_reconcile_ts: float = 0.0
 _RECONCILE_COOLDOWN_SECS: float = 300.0  # 5 minutes
 
 
-def _maybe_reconcile_background() -> None:
-    """Fire reconcile in a daemon thread if the cooldown has passed."""
+def _maybe_reconcile_background(sync: bool = False) -> None:
+    """Fire reconcile if cooldown passed. BTC history can request synchronous mode."""
     global _last_reconcile_ts
     now = time.monotonic()
     if now - _last_reconcile_ts > _RECONCILE_COOLDOWN_SECS:
         _last_reconcile_ts = now
         from app.database import reconcile_predictions
-        threading.Thread(target=reconcile_predictions, daemon=True, name="reconcile-bg").start()
-        logger.info("[history] Background reconcile triggered.")
+        if sync:
+            reconcile_predictions()
+            logger.info("[history] Synchronous reconcile triggered.")
+        else:
+            threading.Thread(target=reconcile_predictions, daemon=True, name="reconcile-bg").start()
+            logger.info("[history] Background reconcile triggered.")
 
 
 def _resolve_symbol(symbol: str) -> str | None:
@@ -67,8 +71,8 @@ def prediction_history(symbol: str, limit: int = 20):
     
     try:
         from app.database import get_predictions
-        # Kick off background reconcile (rate-limited — won't run more than once per 5 min)
-        _maybe_reconcile_background()
+        # BTC audits need latest hourly reconciliation before rendering rows.
+        _maybe_reconcile_background(sync=(sym == "BTC/USD"))
         return get_predictions(sym, limit=limit)
     except Exception as e:
         logger.error(f"[history] Error for {sym}: {e}", exc_info=True)
@@ -167,4 +171,3 @@ def manual_reconcile():
     except Exception as e:
         logger.error(f"[/reconcile] Manual reconcile failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Reconcile error: {e}")
-
