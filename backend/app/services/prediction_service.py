@@ -1,27 +1,42 @@
 """
-prediction_service.py - Multi-symbol LSTM prediction pipeline
+prediction_service.py - Multi-symbol LSTM prediction pipeline.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import logging
 import threading
+
 import numpy as np
 import pandas as pd
 
 from app import cache as redis_cache
 from app.database import get_average_accuracy
-from app.services.asset_profile import get_asset_profile, next_trading_day
+from app.services.asset_profile import (
+    format_prediction_target,
+    get_asset_profile,
+    is_partial_candle,
+    next_prediction_timestamp,
+    parse_candle_timestamp,
+    serialize_candle_timestamp,
+)
 from app.services.db_service import get_sentiment_summary, symbol_to_summary_key
-from app.services.feature_engineering import add_features
 from app.services.event_service import max_event_tier
+from app.services.feature_engineering import add_features
 from app.services.market_intelligence import compute_market_confidence, detect_volatility_event
-from app.services.model_loader import get_model, get_scaler, is_model_ready, get_latest_version
+from app.services.model_loader import (
+    get_loaded_version,
+    get_model,
+    get_scaler,
+    get_latest_version,
+    is_model_ready,
+)
+from app.services.training.retrain_service import wait_for_training
 from app.services.twelve_fetcher import fetch_historical_data
 
 WINDOW = 60
-FUTURE_DAYS = 1
+FUTURE_STEPS = 1
 FEATURES = [
     "close", "returns",
     "sma_20", "ema_9", "ema_21",
@@ -33,11 +48,10 @@ FEATURES = [
     "lag_1", "lag_2", "lag_3", "lag_4", "lag_5",
 ]
 
-
 logger = logging.getLogger(__name__)
 
-# Global locks to prevent multiple simultaneous predictions for the same symbol
 PREDICTION_LOCKS: dict[str, threading.Lock] = {}
+
 
 def get_prediction_lock(symbol: str) -> threading.Lock:
     if symbol not in PREDICTION_LOCKS:
@@ -45,16 +59,21 @@ def get_prediction_lock(symbol: str) -> threading.Lock:
     return PREDICTION_LOCKS[symbol]
 
 
-def _fetch_and_prepare(symbol: str, rows: int = 500) -> pd.DataFrame:
+def _history_row_budget(symbol: str) -> int:
+    profile = get_asset_profile(symbol)
+    return 1200 if profile.history_interval != "1day" else 500
+
+
+def _fetch_and_prepare(symbol: str, rows: int | None = None) -> pd.DataFrame:
     """Fetch from Twelve Data, apply features, drop NaN."""
-    df = fetch_historical_data(symbol, outputsize=rows)
+    df = fetch_historical_data(symbol, outputsize=rows or _history_row_budget(symbol))
     df = add_features(df)
     df.dropna(inplace=True)
     return df
 
 
 def _predict_next_return(symbol: str, df: pd.DataFrame) -> float:
-    """Run symbol-specific LSTM on the last WINDOW rows and predict next-day return."""
+    """Run symbol-specific LSTM on the last WINDOW rows and predict next-step return."""
     scaler = get_scaler(symbol)
     model = get_model(symbol)
 
@@ -64,7 +83,6 @@ def _predict_next_return(symbol: str, df: pd.DataFrame) -> float:
     X = scaled[-WINDOW:].reshape(1, WINDOW, len(FEATURES))
     pred_scaled = float(model.predict(X, verbose=0)[0][0])
 
-    # MinMaxScaler works feature-wise, so a zero-filled vector is safe here.
     dummy = np.zeros((1, len(FEATURES)))
     dummy[0, 1] = pred_scaled
     inv = scaler.inverse_transform(dummy)
@@ -84,24 +102,20 @@ def _stabilize_prediction(
 ) -> dict:
     """
     Blend the model output with recent market behaviour and cap the result
-    by realized volatility so BTC and gold are handled on their own scale.
-    Injects FinBERT news aggregate (sentiment_summary) when available.
+    by realised volatility so each asset is handled on its own scale.
     """
     profile = get_asset_profile(symbol)
     returns = df["returns"].dropna()
-    
-    # Use a longer window for volatility to avoid overreacting to single spikes
+
     vol_window = max(profile.medium_window, 25)
     recent_returns = returns.tail(vol_window)
     short_returns = recent_returns.tail(max(profile.short_window, 3))
     medium_returns = recent_returns
-    
+
     short_baseline = float(short_returns.median()) if not short_returns.empty else 0.0
     medium_baseline = float(medium_returns.mean()) if not medium_returns.empty else short_baseline
-    
-    # Dynamic trend-following weight
     baseline_return = (0.70 * short_baseline) + (0.30 * medium_baseline)
-    
+
     realized_volatility = float(recent_returns.std()) if len(recent_returns) > 1 else 1e-4
     if not np.isfinite(realized_volatility):
         realized_volatility = 1e-4
@@ -113,31 +127,25 @@ def _stabilize_prediction(
 
     vol_cap_multi = profile.volatility_cap_multiplier
     if vol_event.get("is_event"):
-        # Expand the volatility cap during market events — but cap the expansion:
-        # For crypto (BTC), a spike ratio of 5× would push cap_multi to 4.5 — too high.
-        # We limit the event boost so it never exceeds 2.0× the asset's own cap_multiplier.
-        event_boost = vol_event.get("spike_ratio", 1.0) * 0.9
+        event_boost = float(vol_event.get("spike_ratio", 1.0)) * 0.9
         vol_cap_multi = min(vol_cap_multi * 2.0, max(vol_cap_multi, event_boost))
 
-    # Cap return based on asset profile volatility caps
     return_cap = realized_volatility * vol_cap_multi
     return_cap = min(profile.max_return_cap, max(profile.min_return_cap, return_cap))
 
-    # Raw return from LSTM can be erratic; dampen it towards the trend baseline
     raw_return = 0.0 if not np.isfinite(raw_return) else float(raw_return)
     raw_return += sentiment_bias
-    
-    # BTC needs stronger dampening — raw LSTM return can be erratic during high-vol regimes.
-    # Gold/EUR: almost no dampening since their volatility cap already constrains big moves.
+
     if profile.asset_class == "crypto":
-        dampening = 0.70  # Was 0.90 — significantly reduce LSTM raw return influence for BTC
+        dampening = 0.75
     elif profile.asset_class == "forex":
-        dampening = 0.95  # Slight dampening for forex to avoid micro-move overestimation
+        dampening = 0.95
     else:
-        dampening = 1.0   # Commodities (Gold): cap already handles it
-    blended_return = (profile.model_weight * raw_return * dampening) + ((1.0 - profile.model_weight) * baseline_return)
-    
-    # Final clip
+        dampening = 1.0
+
+    blended_return = (
+        profile.model_weight * raw_return * dampening
+    ) + ((1.0 - profile.model_weight) * baseline_return)
     adjusted_return = float(np.clip(blended_return, -return_cap, return_cap))
 
     return {
@@ -157,7 +165,6 @@ def _stabilize_prediction(
 
 def _resolve_signal(symbol: str, predicted_return: float, realized_volatility: float) -> tuple[str, float]:
     profile = get_asset_profile(symbol)
-    # Signal threshold is now significantly more robust to volatility noise
     signal_threshold = max(profile.min_signal_return, realized_volatility * profile.signal_volatility_fraction)
 
     if predicted_return > signal_threshold:
@@ -167,38 +174,40 @@ def _resolve_signal(symbol: str, predicted_return: float, realized_volatility: f
     return "HOLD", signal_threshold
 
 
-def _estimate_base_confidence(stabilized: dict, historical_accuracy: float, signal_threshold: float) -> float:
+def _estimate_base_confidence(
+    stabilized: dict,
+    historical_accuracy: float | None,
+    signal_threshold: float,
+) -> float:
     """
-    Unified confidence scoring that normalizes move intensity across asset classes.
+    Confidence from current signal quality plus reconciled history when available.
     """
-    accuracy_score = float(np.clip(historical_accuracy / 100.0, 0.45, 0.95))
     realized_volatility = max(float(stabilized["realized_volatility"]), 1e-6)
     adjusted_return = float(stabilized["adjusted_return"])
     baseline_return = float(stabilized["baseline_return"])
-    
-    # Move ratio relative to signal threshold (Normalization anchor)
     move_strength = abs(adjusted_return) / max(signal_threshold, 1e-6)
-    
-    # Base confidence centered around accuracy
-    base_confidence = 0.35 + (accuracy_score * 0.50)
 
-    # Reward strong signals that align with trend, penalize extreme outliers
-    if move_strength > 1.0:
-        # Signal is strong (above threshold)
-        if np.sign(adjusted_return) == np.sign(baseline_return):
-            base_confidence += min(0.10, (move_strength - 1.0) * 0.05) # Alignment bonus
-        else:
-            base_confidence -= 0.10 # Contra-trend penalty
+    if historical_accuracy is None:
+        base_confidence = 0.44
     else:
-        # Weak signal (near HOLD zone)
+        accuracy_score = float(np.clip(historical_accuracy / 100.0, 0.45, 0.95))
+        base_confidence = 0.35 + (accuracy_score * 0.50)
+
+    if move_strength > 1.0:
+        if np.sign(adjusted_return) == np.sign(baseline_return):
+            base_confidence += min(0.10, (move_strength - 1.0) * 0.05)
+        else:
+            base_confidence -= 0.08
+    else:
         base_confidence -= 0.05
 
-    # Penalize if it was capped (unrealistic move)
     if stabilized["was_capped"]:
         base_confidence -= 0.15
 
-    # Clip to realistic range
-    return round(float(np.clip(base_confidence, 0.30, 0.88)), 2)
+    if realized_volatility > 0.02:
+        base_confidence -= 0.03
+
+    return round(float(np.clip(base_confidence, 0.25, 0.88)), 2)
 
 
 def _build_payload(
@@ -209,62 +218,39 @@ def _build_payload(
     news_summary: dict | None,
 ) -> dict:
     profile = get_asset_profile(symbol)
-    tail = df.tail(44).reset_index(drop=True)
+    tail_length = 48 if profile.history_interval != "1day" else 44
+    tail = df.tail(tail_length).reset_index(drop=True)
     historical = [
-        {"date": str(row["date"])[:10], "price": round(float(row["close"]), 4)}
+        {"date": str(row["date"]), "price": round(float(row["close"]), 4)}
         for _, row in tail.iterrows()
     ]
 
     last_close = float(df["close"].iloc[-1])
-    last_date = datetime.strptime(str(df["date"].iloc[-1])[:10], "%Y-%m-%d").date()
+    last_timestamp = parse_candle_timestamp(str(df["date"].iloc[-1]))
 
     price = last_close
     total_ret = sum(future_returns)
     signal, signal_threshold = _resolve_signal(symbol, total_ret, float(forecast_meta["realized_volatility"]))
 
-    # ── Date Intelligence: Resolve user confusion about 'skipping' today ──────
-    today_utc = datetime.utcnow().date()
-    is_live_session = (last_date == today_utc)
-    
-    status_label = "Confirmed (Post-Market)"
-    if is_live_session:
-        status_label = "Live (Current session active)"
-
-    forecast = []
-    next_pred_date = next_trading_day(symbol, last_date)
+    forecast: list[dict[str, object]] = []
+    next_target = next_prediction_timestamp(symbol, last_timestamp)
     for ret in future_returns:
         price = price * (1 + ret)
-        forecast.append({"date": next_pred_date.strftime("%Y-%m-%d"), "price": round(price, 4)})
-        next_pred_date = next_trading_day(symbol, next_pred_date)
+        forecast.append({
+            "date": next_target.isoformat(),
+            "price": round(price, 4),
+        })
+        next_target = next_prediction_timestamp(symbol, next_target)
 
     dyn_accuracy = get_average_accuracy(symbol)
+    accuracy_status = "measured" if dyn_accuracy is not None else "not_enough_data"
+
     base_confidence = _estimate_base_confidence(forecast_meta, dyn_accuracy, signal_threshold)
 
     vol_event = detect_volatility_event(df)
     market_intel = compute_market_confidence(base_confidence, vol_event, news_summary)
-
     confidence = market_intel["adjusted_confidence"]
-    market_alert = market_intel["market_alert"]
-
-    if market_alert == "danger":
-        try:
-            from app.services.training.retrain_service import auto_retrain_enabled
-
-            if auto_retrain_enabled():
-                import threading
-                from app.utils.train_all import train_all_symbols
-
-                threading.Thread(target=train_all_symbols, daemon=True).start()
-                print(f"[AI-Self-Correction] CRITICAL EVENT — full retrain started for {symbol}.")
-                market_intel["warnings"].append(
-                    "AI Self-Correction active: refreshing models with the latest market regime."
-                )
-            else:
-                market_intel["warnings"].append(
-                    "Extreme volatility — enable ENABLE_AUTO_RETRAIN=1 for automatic model refresh."
-                )
-        except Exception as e:
-            print(f"[AI-Self-Correction] Failed to trigger emergency retrain: {e}")
+    model_version = get_loaded_version(symbol)
 
     base_volatility = max(
         float(df["volatility_20"].iloc[-1]) if "volatility_20" in df else 0.0,
@@ -272,9 +258,7 @@ def _build_payload(
         profile.min_signal_return,
     )
 
-    is_forex = profile.asset_class == "forex"
-    atr_min = 0.0005 if is_forex else profile.min_signal_return
-    atr = max(atr_min, base_volatility)
+    atr = max(profile.min_signal_return, base_volatility)
 
     if signal == "SELL":
         entry_low = round(last_close * (1 - atr * 0.2), 4)
@@ -303,16 +287,36 @@ def _build_payload(
     scaled_vol = min(100, int((base_volatility / max(profile.max_return_cap, 1e-9)) * 100))
     risk_level = "High" if scaled_vol > 65 else "Medium" if scaled_vol > 35 else "Low"
 
+    prediction_target_time = forecast[0]["date"] if forecast else next_prediction_timestamp(symbol, last_timestamp).isoformat()
+    prediction_value = round(forecast[0]["price"] if forecast else last_close, 4)
+
     return {
         "symbol": symbol,
-        "prediction_status": status_label,
         "historical": historical,
         "predicted": forecast,
-        "next_price": round(forecast[0]["price"] if forecast else last_close, 4),
+        "next_price": prediction_value,
+        "prediction_value": prediction_value,
+        "prediction_target_time": prediction_target_time,
+        "prediction_target_label": profile.prediction_label,
+        "prediction_target_display": format_prediction_target(
+            symbol,
+            parse_candle_timestamp(str(prediction_target_time)),
+        ),
+        "current_price_label": "Current Live Price (TradingView)",
+        "current_price_source": "TradingView widget",
+        "prediction_data_source": f"Twelve Data {profile.history_interval} candles",
+        "prediction_status": "Live" if profile.history_interval != "1day" else "Next close",
         "signal": signal,
         "confidence": confidence,
         "accuracy": dyn_accuracy,
+        "accuracy_status": accuracy_status,
+        "accuracy_note": (
+            "Based on reconciled backend targets."
+            if dyn_accuracy is not None
+            else "Not enough reconciled data."
+        ),
         "model": "MomentumNet v2 (LSTM + calibration)",
+        "model_version": model_version,
         "forecast_meta": {
             "raw_return_pct": round(float(forecast_meta["raw_return"]) * 100, 3),
             "baseline_return_pct": round(float(forecast_meta["baseline_return"]) * 100, 3),
@@ -322,6 +326,7 @@ def _build_payload(
             "confidence_band_pct": round(float(forecast_meta["confidence_band_pct"]), 3),
             "trades_weekends": profile.trades_weekends,
             "asset_class": profile.asset_class,
+            "history_interval": profile.history_interval,
         },
         "market_intelligence": {
             "market_alert": market_intel["market_alert"],
@@ -357,69 +362,58 @@ def _build_payload(
             "event_tier": max_event_tier(market_intel["max_event"]),
             "news_count": market_intel["news_count"],
         },
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
 def run_prediction(symbol: str = "XAU/USD") -> dict:
     lock = get_prediction_lock(symbol)
-    # Timeout of 90s — prevent deadlock if a previous request was interrupted
     acquired = lock.acquire(timeout=90)
     if not acquired:
         raise RuntimeError(f"Prediction for {symbol} timed out waiting for lock. Try again.")
+
+    logger.info("[Prediction] START %s", symbol)
     try:
-        return _run_prediction_locked(symbol)
+        if not wait_for_training(timeout=300):
+            raise RuntimeError(f"Prediction for {symbol} blocked while training is in progress.")
+        payload = _run_prediction_locked(symbol)
+        logger.info(
+            "[Prediction] END %s target=%s version=%s",
+            symbol,
+            payload.get("prediction_target_time"),
+            payload.get("model_version"),
+        )
+        return payload
     finally:
         lock.release()
 
 
 def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
     cache_key = f"predict:{symbol.replace('/', '').lower()}"
+    latest_version = get_latest_version(symbol)
     cached = redis_cache.get_prediction(cache_key)
-    if cached:
+    if cached and cached.get("model_version") == latest_version:
         return cached
 
     if not is_model_ready(symbol):
         raise RuntimeError(f"LSTM model for {symbol} not trained yet.")
 
-    df = _fetch_and_prepare(symbol, rows=500)
+    df = _fetch_and_prepare(symbol)
     if len(df) < WINDOW + 20:
         raise RuntimeError(f"Not enough data rows ({len(df)}) for {symbol}.")
 
-    # ── Handle Partial Candles (The 'Skipping Dates' Fix) ─────────────────────
-    # If the last row from Twelve Data is 'Today' (UTC), it may be a partial candle.
-    # We also drop it if there are fewer than 4 hours of data (partial session).
-    # For forex/commodities (Gold, EUR), markets close around 22:00 UTC — we use
-    # a market-close buffer: treat the candle as partial until 22:30 UTC.
-    # This prevents the double-prediction bug where two forecasts land on the same date.
-    today_utc = datetime.utcnow().date()
-    now_utc_hour = datetime.utcnow().hour + datetime.utcnow().minute / 60.0
-    last_candle_date = datetime.strptime(str(df["date"].iloc[-1])[:10], "%Y-%m-%d").date()
+    now_utc = datetime.now(timezone.utc)
+    last_candle_timestamp = parse_candle_timestamp(str(df["date"].iloc[-1]))
+    if is_partial_candle(symbol, last_candle_timestamp, now_utc=now_utc):
+        logger.info(
+            "[%s] Dropping partial candle %s before prediction.",
+            symbol,
+            df["date"].iloc[-1],
+        )
+        df = df.iloc[:-1].copy()
 
-    profile_partial = get_asset_profile(symbol)
-    # Candle confirmation cutoff per asset class:
-    #   BTC (crypto, 24/7): No market close exists. Always use the latest available
-    #     data from TwelveData as the prediction base. The DB sync fix (single query
-    #     with IS NULL + ORDER BY) ensures chart and audit always match.
-    #   Forex/Commodities (XAU/USD, EUR/USD): Markets close ~22:00 UTC.
-    #     Drop today's partial candle until 22:30 UTC to avoid predicting from
-    #     incomplete intraday data (prevents double-date bug on chart).
-    if last_candle_date == today_utc:
-        if profile_partial.trades_weekends:  # crypto (BTC) — 24/7, no market close
-            is_partial = False  # Always use latest price; dropping it hides current market reality
-        else:  # forex (EUR/USD), commodities (XAU/USD)
-            is_partial = now_utc_hour < 22.5
-
-        if is_partial:
-            logger.info(
-                f"[{symbol}] Partial candle at {now_utc_hour:.1f}h UTC — "
-                f"dropping today ({today_utc}), using yesterday's confirmed close."
-            )
-            df = df.iloc[:-1].copy()
-        else:
-            logger.info(
-                f"[{symbol}] Using today's candle ({today_utc}) at {now_utc_hour:.1f}h UTC as base."
-            )
+    if len(df) < WINDOW + 20:
+        raise RuntimeError(f"Not enough confirmed rows ({len(df)}) for {symbol}.")
 
     news_summary = get_sentiment_summary(symbol_to_summary_key(symbol))
     vol_event = detect_volatility_event(df)
@@ -428,7 +422,7 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
     working_df = df.copy()
     forecast_meta: dict | None = None
 
-    for _ in range(FUTURE_DAYS):
+    for _ in range(FUTURE_STEPS):
         raw_return = _predict_next_return(symbol, working_df)
         step_meta = _stabilize_prediction(symbol, working_df, raw_return, vol_event, news_summary)
         adjusted_return = float(step_meta["adjusted_return"])
@@ -438,11 +432,12 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
             forecast_meta = step_meta
 
         last = working_df.iloc[-1].copy()
-        last_date = datetime.strptime(str(last["date"])[:10], "%Y-%m-%d").date()
+        last_timestamp = parse_candle_timestamp(str(last["date"]))
         synthetic_open = float(last["close"])
         synthetic_close = synthetic_open * (1 + adjusted_return)
+        next_timestamp = next_prediction_timestamp(symbol, last_timestamp)
 
-        last["date"] = next_trading_day(symbol, last_date).strftime("%Y-%m-%d")
+        last["date"] = serialize_candle_timestamp(symbol, next_timestamp)
         last["open"] = synthetic_open
         last["high"] = max(synthetic_open, synthetic_close)
         last["low"] = min(synthetic_open, synthetic_close)
@@ -463,11 +458,11 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
     redis_cache.set_prediction(payload, key=cache_key)
 
     try:
-        from app.database import reconcile_predictions, save_prediction, supabase, save_intelligence_log
+        from app.database import save_intelligence_log, save_prediction, supabase
 
-        target_date = payload["predicted"][0]["date"] if payload["predicted"] else None
+        target_time = payload["prediction_target_time"]
+        target_date = str(target_time)[:10] if target_time else None
         if target_date:
-            # 1. Log generic market sentiment (Intelligence History)
             mi = payload["market_intelligence"]
             nc = int(mi.get("news_count") or 0)
             score_0_100 = int(round((float(mi["sentiment_score"]) + 1.0) * 50.0)) if nc else 50
@@ -480,22 +475,19 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
                 "global_volatility_score": mi["spike_ratio"],
             })
 
-            # Data to save/update
             prediction_record = {
                 "symbol": symbol,
-                "predicted_price": payload["next_price"],
+                "predicted_price": payload["prediction_value"],
                 "confidence": payload["confidence"],
                 "signal": payload["signal"],
                 "predicted_for": target_date,
-                "model_version": get_latest_version(symbol),
+                "model_version": payload["model_version"],
                 "market_alert": payload["market_intelligence"]["market_alert"],
                 "fear_greed_score": score_0_100,
                 "volatility_ratio": payload["market_intelligence"]["spike_ratio"],
                 "warnings": payload["market_intelligence"]["warnings"],
             }
 
-            # 2. Check for ANY existing prediction for this symbol+date
-            #    (both reconciled and unreconciled — prevents duplicate inserts)
             all_existing = (
                 supabase.table("predictions")
                 .select("id, actual_price")
@@ -506,25 +498,18 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
             )
 
             if all_existing.data:
-                # Find the first unreconciled row to update
-                unreconciled = [r for r in all_existing.data if r.get("actual_price") is None]
+                unreconciled = [row for row in all_existing.data if row.get("actual_price") is None]
                 if unreconciled:
-                    # Update the most recent unreconciled prediction
                     pred_id = unreconciled[0]["id"]
-                    supabase.table("predictions") \
-                        .update(prediction_record) \
-                        .eq("id", pred_id) \
-                        .execute()
-                    logger.info(f"[{symbol}] Updated prediction {pred_id} for {target_date}")
+                    supabase.table("predictions").update(prediction_record).eq("id", pred_id).execute()
+                    logger.info("[%s] Updated prediction %s for %s", symbol, pred_id, target_date)
                 else:
-                    # All rows are already reconciled — do NOT insert a new one
-                    logger.info(f"[{symbol}] Prediction for {target_date} already reconciled, skipping insert")
+                    logger.info("[%s] Prediction for %s already reconciled, skipping insert", symbol, target_date)
             else:
-                # No prediction exists for this date — create one
                 save_prediction(prediction_record)
-                logger.info(f"[{symbol}] Saved new prediction for {target_date}")
+                logger.info("[%s] Saved new prediction for %s", symbol, target_date)
 
-    except Exception as e:
-        logger.error(f"Error in Supabase record keeping ({symbol}): {e}")
+    except Exception as exc:
+        logger.error("Error in Supabase record keeping (%s): %s", symbol, exc)
 
     return payload

@@ -5,6 +5,7 @@ import os
 import logging
 import logging.config
 import threading
+import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,7 +57,11 @@ logger.info(f"[CORS] Allowed origins: {ALLOWED_ORIGINS}")
 from app.api.prediction import router as prediction_router
 from app.api.sentiment import router as sentiment_router
 from app.api.search_api import router as search_router
-from app.services.training.retrain_service import auto_retrain_enabled, check_and_trigger_event_retrain
+from app.services.training.retrain_service import (
+    auto_retrain_enabled,
+    check_and_trigger_event_retrain,
+    wait_for_training,
+)
 
 # ── Scheduler Setup (Global UTC) ───────────────────────
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -103,6 +108,12 @@ def run_daily_predictions():
     """
     from app.services.prediction_service import run_prediction
     SYMBOLS = ["XAU/USD", "EUR/USD", "BTC/USD"]
+
+    logger.info("[Scheduler] Prediction refresh START")
+    if not wait_for_training(timeout=600):
+        logger.warning("[Scheduler] Prediction refresh skipped because training is still active.")
+        return
+
     for sym in SYMBOLS:
         try:
             # Clear cache first so fresh data is used
@@ -116,6 +127,7 @@ def run_daily_predictions():
             logger.info(f"[Scheduler] Daily predict OK — {sym}: signal={signal}, next={price}")
         except Exception as e:
             logger.error(f"[Scheduler] Daily predict FAILED for {sym}: {e}", exc_info=True)
+    logger.info("[Scheduler] Prediction refresh END")
 
 
 def run_news_ingestion_job():
@@ -132,20 +144,37 @@ def run_full_retrain_job():
     """
     Executes a full LSTM retrain for all 3 symbols.
     Triggered weekly or by emergency market events.
-    Non-blocking via thread.
     """
     if os.environ.get("ENABLE_AUTO_RETRAIN", "").lower() not in ("1", "true", "yes"):
         logger.info("[Scheduler] Weekly retrain skipped — ENABLE_AUTO_RETRAIN is not set")
         return
-    def _train():
-        try:
-            from app.services.training.retrain_service import retrain_model
-            retrain_model(async_start=False)
-            logger.info("[Scheduler] Weekly retrain initiated.")
-        except Exception as e:
-            logger.error(f"[Scheduler] Weekly retrain failed: {e}", exc_info=True)
-    
-    threading.Thread(target=_train, daemon=True, name="weekly-retrain").start()
+    try:
+        from app.services.training.retrain_service import retrain_model
+
+        logger.info("[Scheduler] Weekly retrain START")
+        retrain_model(async_start=False)
+        logger.info("[Scheduler] Weekly retrain END")
+    except Exception as e:
+        logger.error(f"[Scheduler] Weekly retrain failed: {e}", exc_info=True)
+
+
+def run_startup_jobs():
+    """
+    Startup maintenance is serialized so reconciliation, retraining,
+    prediction refresh, and news ingestion never overlap.
+    """
+    logger.info("[Scheduler] Startup maintenance sequence START")
+    started = time.monotonic()
+    try:
+        run_reconcile_job()
+        run_full_retrain_job()
+        run_daily_predictions()
+        run_news_ingestion_job()
+    finally:
+        logger.info(
+            "[Scheduler] Startup maintenance sequence END (%.1fs)",
+            time.monotonic() - started,
+        )
 # ── Schedule Jobs (UTC — Financial Standard) ──────────────────────────────────
 #
 # Gold Spot and Forex close at 5:00 PM EST = 21:00 or 22:00 UTC.
@@ -228,18 +257,12 @@ async def lifespan(app: FastAPI):
     logger.info("[Scheduler] Started — Running on UTC Standard (21:05, 21:30, 05:00 UTC)")
 
     if os.environ.get("STARTUP_BACKGROUND_JOBS", "1").lower() in ("1", "true", "yes"):
-        threading.Thread(target=run_reconcile_job, daemon=True).start()
-        logger.info("[Scheduler] Startup reconcile triggered in background.")
-
-        threading.Thread(target=run_daily_predictions, daemon=True).start()
-        logger.info("[Scheduler] Startup prediction refresh triggered in background.")
-
-        from app.services.training.retrain_service import retrain_model
-        threading.Thread(target=lambda: retrain_model(async_start=False), daemon=True).start()
-        logger.info("[Scheduler] Startup retrain check triggered.")
-
-        threading.Thread(target=run_news_ingestion_job, daemon=True).start()
-        logger.info("[Scheduler] Startup news ingestion triggered in background.")
+        threading.Thread(
+            target=run_startup_jobs,
+            daemon=True,
+            name="startup-maintenance",
+        ).start()
+        logger.info("[Scheduler] Startup maintenance sequence triggered in background.")
     else:
         logger.info(
             "[Scheduler] Startup background jobs skipped (STARTUP_BACKGROUND_JOBS=0) — quieter dev"
