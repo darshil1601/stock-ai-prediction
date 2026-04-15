@@ -9,6 +9,11 @@ export interface SupportedPredictionAsset {
   cadence: string;
 }
 
+const BTC_HOURLY_CUTOVER = "2026-04-15";
+const BTC_DEFAULT_CADENCE = new Date().toISOString().slice(0, 10) >= BTC_HOURLY_CUTOVER
+  ? "Next 1H close"
+  : "Next daily close";
+
 export const SUPPORTED_PREDICTION_ASSETS: SupportedPredictionAsset[] = [
   {
     symbol: "GOLD",
@@ -32,7 +37,7 @@ export const SUPPORTED_PREDICTION_ASSETS: SupportedPredictionAsset[] = [
     apiSymbol: "BTC",
     displayName: "Bitcoin",
     market: "BTC/USD",
-    cadence: "Next 1H close",
+    cadence: BTC_DEFAULT_CADENCE,
   },
 ];
 

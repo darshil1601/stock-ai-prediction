@@ -20,23 +20,33 @@ interface Props {
   symbol?: string;
 }
 
-function formatTargetLabel(item: HistoryItem, isCrypto: boolean): string {
+const BTC_HOURLY_CUTOVER = "2026-04-15";
+
+function isBtcHourlyRow(item: HistoryItem, isCrypto: boolean): boolean {
+  if (!isCrypto) return false;
+  const rowDate = (item.predicted_for || "").slice(0, 10);
+  return rowDate >= BTC_HOURLY_CUTOVER;
+}
+
+function formatTargetLabel(item: HistoryItem, showTime: boolean): string {
+  if (item.prediction_target_display) {
+    return item.prediction_target_display;
+  }
+
   if (item.prediction_target_time) {
-    return new Date(item.prediction_target_time).toLocaleString("en-IN", {
+    return new Date(item.prediction_target_time).toLocaleString("en-IN", showTime ? {
       day: "2-digit",
       month: "short",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
-    });
-  }
-  if (!item.predicted_for) return "-";
-  if (isCrypto) {
-    return new Date(item.predicted_for).toLocaleDateString("en-IN", {
+    } : {
       day: "2-digit",
       month: "short",
     });
   }
+
+  if (!item.predicted_for) return "-";
   return new Date(item.predicted_for).toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
@@ -50,6 +60,8 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
   const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
 
   const isCrypto = useMemo(() => symbol.toUpperCase().includes("BTC"), [symbol]);
+  const targetHeader = isCrypto ? "Target" : "Target Date";
+  const actualHeader = isCrypto ? "Target Candle" : "Market Close";
 
   const fetchHistory = () => {
     api
@@ -157,19 +169,26 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
         </div>
       )}
 
+      {isCrypto && (
+        <div className="mb-6 px-4 py-3 rounded-2xl bg-amber-500/5 border border-amber-500/20 text-[10px] sm:text-[11px] text-amber-300 font-black uppercase tracking-widest relative z-10 shadow-lg">
+          BTC hourly mode starts from 15 Apr 2026 UTC. Older audit rows remain daily-close records.
+        </div>
+      )}
+
       <div className="overflow-x-auto scrollbar-none relative z-10 -mx-1 px-1">
         <table className="w-full text-left border-separate border-spacing-y-3">
           <thead>
             <tr className="text-[9px] sm:text-[10px] font-black text-slate-600 uppercase tracking-[0.2em]">
-              <th className="pb-2 px-4 whitespace-nowrap">{isCrypto ? "Target Time" : "Target Date"}</th>
+              <th className="pb-2 px-4 whitespace-nowrap">{targetHeader}</th>
               <th className="pb-2 px-4 whitespace-nowrap">AI Forecast</th>
-              <th className="pb-2 px-4 whitespace-nowrap">{isCrypto ? "Target Candle" : "Market Close"}</th>
+              <th className="pb-2 px-4 whitespace-nowrap">{actualHeader}</th>
               <th className="pb-2 px-4 hidden sm:table-cell">Edge</th>
               <th className="pb-2 px-4 text-right">Result</th>
             </tr>
           </thead>
           <tbody>
             {history.map((item) => {
+              const rowIsHourly = isBtcHourlyRow(item, isCrypto);
               const hasActual = item.actual_price != null;
               const diffVal = hasActual ? Math.abs(item.predicted_price - item.actual_price!) : null;
               const diffPct = hasActual ? (diffVal! / item.actual_price!) * 100 : null;
@@ -194,7 +213,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
                 <tr key={item.id} className="group bg-slate-900/40 hover:bg-slate-800/60 transition-all duration-300 shadow-sm">
                   <td className="py-4 px-4 rounded-l-2xl text-slate-500 font-black tabular-nums text-[10px] sm:text-[11px] border-y border-l border-slate-800/50">
                     <span className="opacity-30 mr-1 italic">#</span>
-                    {formatTargetLabel(item, isCrypto)}
+                    {formatTargetLabel(item, rowIsHourly)}
                   </td>
                   <td className="py-4 px-4 font-black text-slate-100 tabular-nums border-y border-slate-800/50 text-xs sm:text-sm">
                     {formatCurrency(item.predicted_price, "USD")}
@@ -218,7 +237,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
                     ) : (
                       <span className="inline-flex items-center gap-1.5 text-amber-500/60 text-[9px] font-black uppercase tracking-widest bg-amber-500/5 px-2 py-1 rounded-lg border border-amber-500/10 shadow-sm">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                        {isCrypto ? "Awaiting Target" : "Active"}
+                        {rowIsHourly ? "Awaiting Target" : "Awaiting Close"}
                       </span>
                     )}
                   </td>

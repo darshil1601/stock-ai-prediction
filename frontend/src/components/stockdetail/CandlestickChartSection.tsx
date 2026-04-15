@@ -20,6 +20,8 @@ const TV_INTERVAL: Record<Timeframe, string> = {
   "5Y":  "M",   // monthly candles
 };
 
+const INTRADAY_TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m", "30m", "1h", "4h"];
+
 interface Props {
   symbol: string;
   activeTimeframe: Timeframe;
@@ -33,7 +35,10 @@ export default function CandlestickChartSection({
 }: Props) {
   const containerRef  = useRef<HTMLDivElement | null>(null);
   const widgetRef     = useRef<any>(null);
-  const intervalStr   = TV_INTERVAL[activeTimeframe];
+  const isBtcSymbol   = symbol.toUpperCase().includes("BTC");
+  const effectiveTimeframe: Timeframe =
+    !isBtcSymbol && INTRADAY_TIMEFRAMES.includes(activeTimeframe) ? "1D" : activeTimeframe;
+  const intervalStr   = TV_INTERVAL[effectiveTimeframe];
   const tvSymbol      = getFormattedSymbol(symbol);
 
   const buildWidget = useCallback(() => {
@@ -125,7 +130,11 @@ export default function CandlestickChartSection({
           </div>
         </div>
         <div className="overflow-x-auto">
-           <TimeframeTabs active={activeTimeframe} onChange={onTimeframeChange} />
+           <TimeframeTabs
+             active={effectiveTimeframe}
+             onChange={onTimeframeChange}
+             showIntraday={isBtcSymbol}
+           />
         </div>
       </div>
 

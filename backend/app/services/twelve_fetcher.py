@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import os
 import logging
+from datetime import datetime, timezone
 
 import pandas as pd
 import requests
 from dotenv import load_dotenv
 
-from app.services.asset_profile import get_asset_profile
+from app.services.asset_profile import resolve_history_interval
 
 load_dotenv()
 
@@ -30,8 +31,7 @@ def fetch_historical_data(
       date (str), open, high, low, close, volume
     Sorted oldest -> newest.
     """
-    profile = get_asset_profile(symbol)
-    candle_interval = interval or profile.history_interval
+    candle_interval = interval or resolve_history_interval(symbol, datetime.now(timezone.utc))
 
     url = f"{BASE_URL}/time_series"
     params = {

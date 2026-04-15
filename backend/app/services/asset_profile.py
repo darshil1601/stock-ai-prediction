@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 
 
+BTC_HOURLY_CUTOVER_DATE = date(2026, 4, 15)
+
+
 @dataclass(frozen=True)
 class AssetProfile:
     symbol: str
@@ -113,6 +116,71 @@ def get_asset_profile(symbol: str) -> AssetProfile:
     return ASSET_PROFILES.get(symbol, DEFAULT_PROFILE)
 
 
+def _coerce_reference_date(reference: str | datetime | date | None) -> date | None:
+    if reference is None:
+        return None
+    if isinstance(reference, datetime):
+        return reference.astimezone(timezone.utc).date()
+    if isinstance(reference, date):
+        return reference
+
+    text = str(reference).strip()
+    if not text:
+        return None
+
+    maybe_date = text[:10]
+    try:
+        return datetime.strptime(maybe_date, "%Y-%m-%d").date()
+    except ValueError:
+        pass
+
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).date()
+    except ValueError:
+        return None
+
+
+def resolve_history_interval(
+    symbol: str,
+    reference: str | datetime | date | None = None,
+) -> str:
+    profile = get_asset_profile(symbol)
+    if profile.history_interval == "1day":
+        return "1day"
+
+    # BTC hourly rollout starts only from the configured cutover date.
+    if symbol == "BTC/USD":
+        ref_date = _coerce_reference_date(reference) or datetime.now(timezone.utc).date()
+        return "1h" if ref_date >= BTC_HOURLY_CUTOVER_DATE else "1day"
+
+    return profile.history_interval
+
+
+def resolve_target_step(
+    symbol: str,
+    reference: str | datetime | date | None = None,
+) -> timedelta:
+    interval = resolve_history_interval(symbol, reference)
+    if interval == "1day":
+        return timedelta(days=1)
+    return get_asset_profile(symbol).target_step
+
+
+def resolve_prediction_label(
+    symbol: str,
+    reference: str | datetime | date | None = None,
+) -> str:
+    interval = resolve_history_interval(symbol, reference)
+    if interval == "1day":
+        return "Predicted Next Close"
+    return get_asset_profile(symbol).prediction_label
+
+
 def parse_candle_timestamp(raw_value: str | datetime | date) -> datetime:
     if isinstance(raw_value, datetime):
         return raw_value if raw_value.tzinfo else raw_value.replace(tzinfo=timezone.utc)
@@ -131,8 +199,8 @@ def parse_candle_timestamp(raw_value: str | datetime | date) -> datetime:
 
 
 def serialize_candle_timestamp(symbol: str, ts: datetime) -> str:
-    profile = get_asset_profile(symbol)
-    if profile.history_interval == "1day":
+    interval = resolve_history_interval(symbol, ts)
+    if interval == "1day":
         return ts.astimezone(timezone.utc).strftime("%Y-%m-%d")
     return ts.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -153,8 +221,9 @@ def next_trading_day(symbol: str, current_date: date) -> date:
 def next_prediction_timestamp(symbol: str, current_timestamp: datetime) -> datetime:
     profile = get_asset_profile(symbol)
     current_utc = current_timestamp.astimezone(timezone.utc)
+    interval = resolve_history_interval(symbol, current_utc)
 
-    if profile.history_interval == "1day":
+    if interval == "1day":
         next_day = next_trading_day(symbol, current_utc.date())
         close_hour = profile.market_close_hour_utc or 22
         close_minute = profile.market_close_minute_utc or 0
@@ -163,7 +232,7 @@ def next_prediction_timestamp(symbol: str, current_timestamp: datetime) -> datet
             time(close_hour, close_minute, tzinfo=timezone.utc),
         )
 
-    return current_utc + profile.target_step
+    return current_utc + resolve_target_step(symbol, current_utc)
 
 
 def is_partial_candle(
@@ -174,8 +243,9 @@ def is_partial_candle(
     profile = get_asset_profile(symbol)
     current_utc = now_utc or datetime.now(timezone.utc)
     candle_utc = last_timestamp.astimezone(timezone.utc)
+    interval = resolve_history_interval(symbol, current_utc)
 
-    if profile.history_interval == "1day":
+    if interval == "1day":
         if candle_utc.date() != current_utc.date():
             return False
         close_hour = profile.market_close_hour_utc or 22
@@ -186,12 +256,12 @@ def is_partial_candle(
         ) + timedelta(minutes=profile.candle_confirmation_buffer_minutes)
         return current_utc < cutoff
 
-    return current_utc < (candle_utc + profile.target_step)
+    return current_utc < (candle_utc + resolve_target_step(symbol, current_utc))
 
 
 def format_prediction_target(symbol: str, target_timestamp: datetime) -> str:
-    profile = get_asset_profile(symbol)
     target_utc = target_timestamp.astimezone(timezone.utc)
-    if profile.history_interval == "1day":
-        return target_utc.strftime("%Y-%m-%d %H:%M UTC")
-    return target_utc.strftime("%Y-%m-%d %H:%M UTC")
+    interval = resolve_history_interval(symbol, target_utc)
+    if interval == "1day":
+        return target_utc.strftime("%d %b %y")
+    return target_utc.strftime("%d %b %y %H:%M UTC")

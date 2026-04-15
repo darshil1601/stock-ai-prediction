@@ -19,6 +19,8 @@ from app.services.asset_profile import (
     is_partial_candle,
     next_prediction_timestamp,
     parse_candle_timestamp,
+    resolve_history_interval,
+    resolve_prediction_label,
     serialize_candle_timestamp,
 )
 from app.services.db_service import get_sentiment_summary, symbol_to_summary_key
@@ -60,8 +62,8 @@ def get_prediction_lock(symbol: str) -> threading.Lock:
 
 
 def _history_row_budget(symbol: str) -> int:
-    profile = get_asset_profile(symbol)
-    return 1200 if profile.history_interval != "1day" else 500
+    interval = resolve_history_interval(symbol)
+    return 1200 if interval != "1day" else 500
 
 
 def _fetch_and_prepare(symbol: str, rows: int | None = None) -> pd.DataFrame:
@@ -217,8 +219,11 @@ def _build_payload(
     forecast_meta: dict,
     news_summary: dict | None,
 ) -> dict:
+    last_timestamp = parse_candle_timestamp(str(df["date"].iloc[-1]))
+    history_interval = resolve_history_interval(symbol, last_timestamp)
     profile = get_asset_profile(symbol)
-    tail_length = 48 if profile.history_interval != "1day" else 44
+
+    tail_length = 48 if history_interval != "1day" else 44
     tail = df.tail(tail_length).reset_index(drop=True)
     historical = [
         {"date": str(row["date"]), "price": round(float(row["close"]), 4)}
@@ -226,7 +231,6 @@ def _build_payload(
     ]
 
     last_close = float(df["close"].iloc[-1])
-    last_timestamp = parse_candle_timestamp(str(df["date"].iloc[-1]))
 
     price = last_close
     total_ret = sum(future_returns)
@@ -288,6 +292,8 @@ def _build_payload(
     risk_level = "High" if scaled_vol > 65 else "Medium" if scaled_vol > 35 else "Low"
 
     prediction_target_time = forecast[0]["date"] if forecast else next_prediction_timestamp(symbol, last_timestamp).isoformat()
+    prediction_target_dt = parse_candle_timestamp(str(prediction_target_time))
+    target_interval = resolve_history_interval(symbol, prediction_target_dt)
     prediction_value = round(forecast[0]["price"] if forecast else last_close, 4)
 
     return {
@@ -297,15 +303,15 @@ def _build_payload(
         "next_price": prediction_value,
         "prediction_value": prediction_value,
         "prediction_target_time": prediction_target_time,
-        "prediction_target_label": profile.prediction_label,
+        "prediction_target_label": resolve_prediction_label(symbol, prediction_target_dt),
         "prediction_target_display": format_prediction_target(
             symbol,
-            parse_candle_timestamp(str(prediction_target_time)),
+            prediction_target_dt,
         ),
         "current_price_label": "Current Live Price (TradingView)",
         "current_price_source": "TradingView widget",
-        "prediction_data_source": f"Twelve Data {profile.history_interval} candles",
-        "prediction_status": "Live" if profile.history_interval != "1day" else "Next close",
+        "prediction_data_source": f"Twelve Data {target_interval} candles",
+        "prediction_status": "Live" if target_interval != "1day" else "Next close",
         "signal": signal,
         "confidence": confidence,
         "accuracy": dyn_accuracy,
@@ -326,7 +332,7 @@ def _build_payload(
             "confidence_band_pct": round(float(forecast_meta["confidence_band_pct"]), 3),
             "trades_weekends": profile.trades_weekends,
             "asset_class": profile.asset_class,
-            "history_interval": profile.history_interval,
+            "history_interval": target_interval,
         },
         "market_intelligence": {
             "market_alert": market_intel["market_alert"],
@@ -463,7 +469,7 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
         target_time = payload["prediction_target_time"]
         target_date = str(target_time)[:10] if target_time else None
         if target_date:
-            profile = get_asset_profile(symbol)
+            interval_for_target = resolve_history_interval(symbol, target_date)
             mi = payload["market_intelligence"]
             nc = int(mi.get("news_count") or 0)
             score_0_100 = int(round((float(mi["sentiment_score"]) + 1.0) * 50.0)) if nc else 50
@@ -489,7 +495,7 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
                 "warnings": payload["market_intelligence"]["warnings"],
             }
 
-            if profile.asset_class == "crypto":
+            if interval_for_target != "1day":
                 now_utc = datetime.now(timezone.utc)
                 lookback_iso = (now_utc - timedelta(minutes=75)).isoformat()
                 recent_unreconciled = (

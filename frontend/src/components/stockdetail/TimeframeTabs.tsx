@@ -7,6 +7,7 @@ const SWING: Timeframe[]    = ["1D", "1W", "1M", "3M", "6M", "1Y", "5Y"];
 interface Props {
   active: Timeframe;
   onChange: (tf: Timeframe) => void;
+  showIntraday?: boolean;
 }
 
 function Tab({
@@ -32,19 +33,21 @@ function Tab({
   );
 }
 
-export default function TimeframeTabs({ active, onChange }: Props) {
+export default function TimeframeTabs({ active, onChange, showIntraday = true }: Props) {
+  const hasIntraday = showIntraday && INTRADAY.length > 0;
+
   return (
     <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-none pb-0.5 sm:pb-0">
-      {/* Intraday group */}
-      <div className="flex items-center gap-0.5 bg-slate-950/50 border border-slate-800 rounded-xl p-1 shrink-0">
-        <span className="text-[9px] text-slate-600 px-1.5 font-black uppercase tracking-widest hidden xs:block">Intra</span>
-        {INTRADAY.map((tf) => (
-          <Tab key={tf} label={tf} isActive={active === tf} onClick={() => onChange(tf)} />
-        ))}
-      </div>
+      {hasIntraday && (
+        <div className="flex items-center gap-0.5 bg-slate-950/50 border border-slate-800 rounded-xl p-1 shrink-0">
+          <span className="text-[9px] text-slate-600 px-1.5 font-black uppercase tracking-widest hidden xs:block">Intra</span>
+          {INTRADAY.map((tf) => (
+            <Tab key={tf} label={tf} isActive={active === tf} onClick={() => onChange(tf)} />
+          ))}
+        </div>
+      )}
 
-      {/* Vertical Divider */}
-      <div className="w-px h-6 bg-slate-800 shrink-0 hidden sm:block" />
+      {hasIntraday && <div className="w-px h-6 bg-slate-800 shrink-0 hidden sm:block" />}
 
       {/* Swing / Long-term group */}
       <div className="flex items-center gap-0.5 bg-slate-950/50 border border-slate-800 rounded-xl p-1 shrink-0">
