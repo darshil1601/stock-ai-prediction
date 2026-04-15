@@ -14,6 +14,8 @@ import EntryExitCard from "../components/stockdetail/EntryExitCard";
 import RiskScoreCard from "../components/stockdetail/RiskScoreCard";
 import PredictionHistory from "../components/stockdetail/PredictionHistory";
 
+const INTRADAY_TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m", "30m", "1h", "4h"];
+
 const SymbolInfoWidget = memo(function SymbolInfoWidget({ symbol }: { symbol: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
@@ -89,6 +91,13 @@ export default function StockDetail() {
   const activeEntryExit = apiPayload?.entry_exit_zones ?? null;
   const activeRiskMetrics = apiPayload?.risk_metrics ?? null;
   const isPredictionSupported = useMemo(() => supported !== null, [supported]);
+  const isBtcSymbol = useMemo(() => sym.includes("BTC"), [sym]);
+
+  useEffect(() => {
+    if (!isBtcSymbol && INTRADAY_TIMEFRAMES.includes(activeTimeframe)) {
+      setActiveTimeframe("1D");
+    }
+  }, [activeTimeframe, isBtcSymbol]);
 
   return (
     <div className="space-y-6 sm:space-y-8 pb-12 px-1 sm:px-0">

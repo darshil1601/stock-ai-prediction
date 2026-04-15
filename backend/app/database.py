@@ -14,6 +14,7 @@ from app.services.asset_profile import (
     format_prediction_target,
     get_asset_profile,
     parse_candle_timestamp,
+    resolve_history_interval,
 )
 
 load_dotenv()
@@ -69,8 +70,18 @@ def _parse_iso_timestamp(raw: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _estimate_target_timestamp(row: dict, profile) -> datetime | None:
-    if profile.history_interval != "1day":
+def _prediction_interval_for_row(symbol: str, row: dict) -> str:
+    predicted_for = row.get("predicted_for")
+    if predicted_for:
+        return resolve_history_interval(symbol, str(predicted_for))
+    created_at = _parse_iso_timestamp(row.get("created_at"))
+    return resolve_history_interval(symbol, created_at)
+
+
+def _estimate_target_timestamp(row: dict, symbol: str) -> datetime | None:
+    profile = get_asset_profile(symbol)
+    row_interval = _prediction_interval_for_row(symbol, row)
+    if row_interval != "1day":
         created_at = _parse_iso_timestamp(row.get("created_at"))
         if not created_at:
             return None
@@ -177,9 +188,8 @@ def get_predictions(symbol: str = "XAU/USD", limit: int = 60):
             .execute()
         )
         rows = resp.data or []
-        profile = get_asset_profile(symbol)
         for row in rows:
-            target_ts = _estimate_target_timestamp(row, profile)
+            target_ts = _estimate_target_timestamp(row, symbol)
             if not target_ts:
                 continue
             row["prediction_target_time"] = target_ts.isoformat()
@@ -193,7 +203,6 @@ def get_predictions(symbol: str = "XAU/USD", limit: int = 60):
 def get_average_accuracy(symbol: str = "XAU/USD", days: int = 30, min_records: int = 5) -> float | None:
     """Mean accuracy (100 - abs(diff%)) for recent reconciled records or None if insufficient."""
     try:
-        profile = get_asset_profile(symbol)
         now_utc = datetime.now(timezone.utc)
         resp = (
             get_supabase()
@@ -208,8 +217,8 @@ def get_average_accuracy(symbol: str = "XAU/USD", days: int = 30, min_records: i
         data = resp.data or []
         errors: list[float] = []
         for row in data:
-            if profile.asset_class == "crypto":
-                target_ts = _estimate_target_timestamp(row, profile)
+            if _prediction_interval_for_row(symbol, row) != "1day":
+                target_ts = _estimate_target_timestamp(row, symbol)
                 if not target_ts or target_ts > now_utc:
                     continue
             predicted = row.get("predicted_price")
@@ -231,8 +240,6 @@ def reconcile_predictions():
         from app.services.twelve_fetcher import fetch_historical_data
 
         now_utc = datetime.now(timezone.utc)
-        today_utc = now_utc.strftime("%Y-%m-%d")
-        yesterday_utc = (now_utc - timedelta(days=1)).strftime("%Y-%m-%d")
 
         resp = (
             get_supabase()
@@ -248,60 +255,68 @@ def reconcile_predictions():
 
         from collections import defaultdict
 
-        grouped: dict[str, list[dict]] = defaultdict(list)
+        intraday_grouped: dict[str, list[dict]] = defaultdict(list)
+        daily_grouped: dict[str, list[dict]] = defaultdict(list)
         for pred in null_preds:
             symbol = pred["symbol"]
             profile = get_asset_profile(symbol)
+            target_ts = _estimate_target_timestamp(pred, symbol)
+            if not target_ts:
+                continue
 
-            if profile.asset_class == "crypto":
-                grouped[symbol].append(pred)
+            ready_at = target_ts + timedelta(minutes=profile.candle_confirmation_buffer_minutes)
+            if ready_at > now_utc:
+                continue
+
+            row_interval = _prediction_interval_for_row(symbol, pred)
+            if row_interval != "1day":
+                intraday_grouped[symbol].append(pred)
             else:
-                markets_closed_today = (now_utc.hour + now_utc.minute / 60.0) >= 22.5
-                cutoff_date = today_utc if markets_closed_today else yesterday_utc
-                if pred["predicted_for"] <= cutoff_date:
-                    grouped[symbol].append(pred)
+                daily_grouped[symbol].append(pred)
 
-        for symbol, preds in grouped.items():
+        for symbol, preds in intraday_grouped.items():
             try:
-                profile = get_asset_profile(symbol)
-                outputsize = 720 if profile.history_interval != "1day" else 60
-                df = fetch_historical_data(symbol, outputsize=outputsize)
+                outputsize = max(720, len(preds) * 8)
+                df = fetch_historical_data(symbol, outputsize=outputsize, interval="1h")
 
-                if profile.asset_class == "crypto":
-                    candles: list[tuple[datetime, float]] = []
-                    for _, row in df.iterrows():
-                        try:
-                            ts = parse_candle_timestamp(row["date"])
-                        except Exception:
-                            continue
-                        candles.append((ts.astimezone(timezone.utc), float(row["close"])))
+                candles: list[tuple[datetime, float]] = []
+                for _, row in df.iterrows():
+                    try:
+                        ts = parse_candle_timestamp(row["date"])
+                    except Exception:
+                        continue
+                    candles.append((ts.astimezone(timezone.utc), float(row["close"])))
 
-                    if not candles:
+                if not candles:
+                    continue
+
+                for pred in preds:
+                    target_ts = _estimate_target_timestamp(pred, symbol)
+                    if not target_ts:
                         continue
 
-                    for pred in preds:
-                        target_ts = _estimate_target_timestamp(pred, profile)
-                        if not target_ts:
-                            continue
-                        ready_at = target_ts + timedelta(minutes=profile.candle_confirmation_buffer_minutes)
-                        if ready_at > now_utc:
-                            continue
-
-                        actual = _first_close_at_or_after(candles, target_ts)
-                        if actual is not None:
-                            get_supabase().table("predictions").update({"actual_price": actual}).eq("id", pred["id"]).execute()
-                else:
-                    price_map: dict[str, float] = {}
-                    for _, row in df.iterrows():
-                        key = str(row["date"])[:10]
-                        price_map[key] = float(row["close"])
-
-                    for pred in preds:
-                        actual = price_map.get(pred["predicted_for"])
-                        if actual is not None:
-                            get_supabase().table("predictions").update({"actual_price": actual}).eq("id", pred["id"]).execute()
+                    actual = _first_close_at_or_after(candles, target_ts)
+                    if actual is not None:
+                        get_supabase().table("predictions").update({"actual_price": actual}).eq("id", pred["id"]).execute()
             except Exception as exc:
-                logger.error("[Audit] Partial failure for %s: %s", symbol, exc)
+                logger.error("[Audit] Partial intraday failure for %s: %s", symbol, exc)
+
+        for symbol, preds in daily_grouped.items():
+            try:
+                outputsize = max(60, len(preds) + 10)
+                df = fetch_historical_data(symbol, outputsize=outputsize, interval="1day")
+
+                price_map: dict[str, float] = {}
+                for _, row in df.iterrows():
+                    key = str(row["date"])[:10]
+                    price_map[key] = float(row["close"])
+
+                for pred in preds:
+                    actual = price_map.get(pred["predicted_for"])
+                    if actual is not None:
+                        get_supabase().table("predictions").update({"actual_price": actual}).eq("id", pred["id"]).execute()
+            except Exception as exc:
+                logger.error("[Audit] Partial daily failure for %s: %s", symbol, exc)
 
         logger.info("[Audit] Reconciliation cycle complete.")
     except Exception as exc:
