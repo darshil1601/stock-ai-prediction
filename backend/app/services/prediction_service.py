@@ -3,7 +3,7 @@ prediction_service.py - Multi-symbol LSTM prediction pipeline.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import logging
 import threading
@@ -463,6 +463,7 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
         target_time = payload["prediction_target_time"]
         target_date = str(target_time)[:10] if target_time else None
         if target_date:
+            profile = get_asset_profile(symbol)
             mi = payload["market_intelligence"]
             nc = int(mi.get("news_count") or 0)
             score_0_100 = int(round((float(mi["sentiment_score"]) + 1.0) * 50.0)) if nc else 50
@@ -488,26 +489,47 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
                 "warnings": payload["market_intelligence"]["warnings"],
             }
 
-            all_existing = (
-                supabase.table("predictions")
-                .select("id, actual_price")
-                .eq("symbol", symbol)
-                .eq("predicted_for", target_date)
-                .order("created_at", desc=True)
-                .execute()
-            )
-
-            if all_existing.data:
-                unreconciled = [row for row in all_existing.data if row.get("actual_price") is None]
-                if unreconciled:
-                    pred_id = unreconciled[0]["id"]
+            if profile.asset_class == "crypto":
+                now_utc = datetime.now(timezone.utc)
+                lookback_iso = (now_utc - timedelta(minutes=75)).isoformat()
+                recent_unreconciled = (
+                    supabase.table("predictions")
+                    .select("id, actual_price, created_at")
+                    .eq("symbol", symbol)
+                    .is_("actual_price", "null")
+                    .gte("created_at", lookback_iso)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                if recent_unreconciled.data:
+                    pred_id = recent_unreconciled.data[0]["id"]
                     supabase.table("predictions").update(prediction_record).eq("id", pred_id).execute()
-                    logger.info("[%s] Updated prediction %s for %s", symbol, pred_id, target_date)
+                    logger.info("[%s] Updated latest intraday prediction %s", symbol, pred_id)
                 else:
-                    logger.info("[%s] Prediction for %s already reconciled, skipping insert", symbol, target_date)
+                    save_prediction(prediction_record)
+                    logger.info("[%s] Saved new intraday prediction for %s", symbol, target_date)
             else:
-                save_prediction(prediction_record)
-                logger.info("[%s] Saved new prediction for %s", symbol, target_date)
+                all_existing = (
+                    supabase.table("predictions")
+                    .select("id, actual_price")
+                    .eq("symbol", symbol)
+                    .eq("predicted_for", target_date)
+                    .order("created_at", desc=True)
+                    .execute()
+                )
+
+                if all_existing.data:
+                    unreconciled = [row for row in all_existing.data if row.get("actual_price") is None]
+                    if unreconciled:
+                        pred_id = unreconciled[0]["id"]
+                        supabase.table("predictions").update(prediction_record).eq("id", pred_id).execute()
+                        logger.info("[%s] Updated prediction %s for %s", symbol, pred_id, target_date)
+                    else:
+                        logger.info("[%s] Prediction for %s already reconciled, skipping insert", symbol, target_date)
+                else:
+                    save_prediction(prediction_record)
+                    logger.info("[%s] Saved new prediction for %s", symbol, target_date)
 
     except Exception as exc:
         logger.error("Error in Supabase record keeping (%s): %s", symbol, exc)
