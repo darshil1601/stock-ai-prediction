@@ -25,8 +25,8 @@ env/
 *.pkl
 *.pt
 *.pth
-!backend/app/models/*.h5
-!backend/app/models/*.pkl
+backend/app/models/*.h5
+backend/app/models/*.pkl
 
 # ── Node / Frontend ────────────────────────
 node_modules/
