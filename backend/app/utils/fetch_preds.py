@@ -5,11 +5,11 @@ from supabase import create_client
 load_dotenv()
 
 url = os.environ.get("SUPABASE_URL")
-key = os.environ.get("SUPABASE_KEY")
+key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 def get_predictions_for_date(date_str):
     if not url or not key:
-        raise ValueError("SUPABASE_URL or SUPABASE_KEY not found in .env")
+        raise ValueError("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not found in .env")
     supabase = create_client(url, key)
     resp = supabase.table("predictions").select("*").eq("predicted_for", date_str).execute()
     return resp.data

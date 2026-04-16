@@ -20,7 +20,7 @@ interface Props {
   symbol?: string;
 }
 
-const BTC_HOURLY_CUTOVER = "2026-04-15";
+const BTC_HOURLY_CUTOVER = "2026-04-16";
 
 function isBtcHourlyRow(item: HistoryItem, isCrypto: boolean): boolean {
   if (!isCrypto) return false;
@@ -171,7 +171,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
 
       {isCrypto && (
         <div className="mb-6 px-4 py-3 rounded-2xl bg-amber-500/5 border border-amber-500/20 text-[10px] sm:text-[11px] text-amber-300 font-black uppercase tracking-widest relative z-10 shadow-lg">
-          BTC hourly mode starts from 15 Apr 2026 UTC. Older audit rows remain daily-close records.
+          BTC hourly mode starts from 16 Apr 2026 UTC. Older audit rows remain daily-close records.
         </div>
       )}
 

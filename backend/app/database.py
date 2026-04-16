@@ -212,14 +212,15 @@ def get_average_accuracy(symbol: str = "XAU/USD", days: int = 30, min_records: i
     """Mean accuracy (100 - abs(diff%)) for recent reconciled records or None if insufficient."""
     try:
         now_utc = datetime.now(timezone.utc)
+        lookback = (now_utc - timedelta(days=days)).isoformat()
         resp = (
             get_supabase()
             .table("predictions")
             .select("predicted_price, actual_price, predicted_for, created_at")
             .eq("symbol", symbol)
             .not_.is_("actual_price", "null")
+            .gte("created_at", lookback)
             .order("created_at", desc=True)
-            .limit(days)
             .execute()
         )
         data = resp.data or []
