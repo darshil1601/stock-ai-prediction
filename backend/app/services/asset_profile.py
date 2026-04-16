@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 
 
-BTC_HOURLY_CUTOVER_DATE = date(2026, 4, 15)
+BTC_HOURLY_CUTOVER_DATE = date(2026, 4, 16)
 
 
 @dataclass(frozen=True)
