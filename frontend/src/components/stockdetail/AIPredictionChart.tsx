@@ -109,18 +109,39 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
     );
   }
 
-  const chartData = useMemo(() => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const { merged, formattedToday } = useMemo(() => {
     if (!apiData) {
-      return [] as Array<{
-        date: string;
-        actual: number | null;
-        predicted: number | null;
-        bandBase: number | null;
-        bandWidth: number | null;
-      }>;
+      return { merged: [], formattedToday: null };
     }
 
-    const merged: Array<{
+    const isDaily = apiData?.forecast_meta?.history_interval === "1day";
+
+    const formatDate = (raw: string) => {
+      if (!raw) return "";
+      try {
+        const d = new Date(raw);
+        if (isDaily) {
+          return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+        }
+        return d.toLocaleTimeString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
+      } catch {
+        return raw.slice(5, 16);
+      }
+    };
+
+    const result: Array<{
       date: string;
       actual: number | null;
       predicted: number | null;
@@ -129,8 +150,8 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
     }> = [];
 
     for (const row of apiData.historical) {
-      merged.push({
-        date: row.date.slice(5, 16),
+      result.push({
+        date: formatDate(row.date),
         actual: row.price,
         predicted: null,
         bandBase: null,
@@ -139,9 +160,11 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
     }
 
     const last = apiData.historical.at(-1);
+    const fToday = last ? formatDate(last.date) : null;
+    
     if (last && apiData.predicted.length) {
-      merged.push({
-        date: last.date.slice(5, 16),
+      result.push({
+        date: fToday ?? "",
         actual: last.price,
         predicted: last.price,
         bandBase: null,
@@ -152,8 +175,8 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
     const bandPct = (apiData.forecast_meta?.confidence_band_pct ?? 1.5) / 100;
     const band = apiData.prediction_value * bandPct;
     for (const row of apiData.predicted) {
-      merged.push({
-        date: row.date.slice(5, 16),
+      result.push({
+        date: formatDate(row.date),
         actual: null,
         predicted: row.price,
         bandBase: row.price - band,
@@ -161,7 +184,7 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
       });
     }
 
-    return merged;
+    return { merged: result, formattedToday: fToday };
   }, [apiData]);
 
   const signal = apiData?.signal ?? "HOLD";
@@ -169,7 +192,6 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
   const confidence = Math.round((apiData?.confidence ?? 0) * 100);
   const accuracy = apiData?.accuracy;
   const accuracyText = accuracy == null ? "Not enough data" : `${accuracy.toFixed(1)}%`;
-  const todayDate = apiData?.historical.at(-1)?.date.slice(5, 16) ?? null;
   const chartHeight = typeof window !== "undefined" && window.innerWidth < 640 ? 250 : 320;
 
   if (loading) {
@@ -265,102 +287,104 @@ export default function AIPredictionChart({ symbol = "gold", onApiData }: Props)
       </div>
 
       <div className="relative z-10" style={{ height: chartHeight }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-            <defs>
-              <linearGradient id="confBandGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#22c55e" stopOpacity={0.14} />
-                <stop offset="100%" stopColor="#22c55e" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
+        {mounted && (
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={merged} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <defs>
+                <linearGradient id="confBandGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#22c55e" stopOpacity={0.14} />
+                  <stop offset="100%" stopColor="#22c55e" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
 
-            <CartesianGrid stroke="rgba(255,255,255,0.03)" vertical={false} />
-            <XAxis
-              dataKey="date"
-              stroke="#334155"
-              tick={{ fill: "#64748b", fontSize: 9, fontWeight: 700 }}
-              tickLine={false}
-              axisLine={{ stroke: "rgba(255,255,255,0.05)" }}
-              interval="preserveStartEnd"
-            />
-            <YAxis
-              stroke="#334155"
-              tick={{ fill: "#64748b", fontSize: 9, fontWeight: 700 }}
-              tickLine={false}
-              axisLine={{ stroke: "rgba(255,255,255,0.05)" }}
-              width={58}
-              tickFormatter={(v: number) => {
-                if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-                if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}k`;
-                return `$${v.toFixed(2)}`;
-              }}
-            />
-            <Tooltip
-              content={<CustomTooltip />}
-              cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1 }}
-            />
-
-            <Area
-              type="monotone"
-              dataKey="bandBase"
-              stackId="band"
-              stroke="none"
-              fill="transparent"
-              dot={false}
-              legendType="none"
-              isAnimationActive={false}
-            />
-            <Area
-              type="monotone"
-              dataKey="bandWidth"
-              stackId="band"
-              stroke="rgba(34,197,94,0.2)"
-              strokeWidth={1}
-              strokeDasharray="3 3"
-              fill="url(#confBandGrad)"
-              dot={false}
-              legendType="none"
-              isAnimationActive={false}
-            />
-
-            <Line
-              type="monotone"
-              dataKey="actual"
-              stroke="#60a5fa"
-              strokeWidth={2.5}
-              dot={false}
-              connectNulls={false}
-              isAnimationActive
-              animationDuration={900}
-            />
-            <Line
-              type="monotone"
-              dataKey="predicted"
-              stroke="#34d399"
-              strokeWidth={2.5}
-              strokeDasharray="6 4"
-              dot={false}
-              connectNulls={false}
-              isAnimationActive
-              animationDuration={900}
-            />
-
-            {todayDate && (
-              <ReferenceLine
-                x={todayDate}
-                stroke="rgba(255,255,255,0.2)"
-                strokeDasharray="4 4"
-                label={{
-                  value: "Current candle",
-                  fill: "#94a3b8",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  position: "insideTopRight",
+              <CartesianGrid stroke="rgba(255,255,255,0.03)" vertical={false} />
+              <XAxis
+                dataKey="date"
+                stroke="#334155"
+                tick={{ fill: "#64748b", fontSize: 9, fontWeight: 700 }}
+                tickLine={false}
+                axisLine={{ stroke: "rgba(255,255,255,0.05)" }}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                stroke="#334155"
+                tick={{ fill: "#64748b", fontSize: 9, fontWeight: 700 }}
+                tickLine={false}
+                axisLine={{ stroke: "rgba(255,255,255,0.05)" }}
+                width={58}
+                tickFormatter={(v: number) => {
+                  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+                  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}k`;
+                  return `$${v.toFixed(2)}`;
                 }}
               />
-            )}
-          </ComposedChart>
-        </ResponsiveContainer>
+              <Tooltip
+                content={<CustomTooltip />}
+                cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1 }}
+              />
+
+              <Area
+                type="monotone"
+                dataKey="bandBase"
+                stackId="band"
+                stroke="none"
+                fill="transparent"
+                dot={false}
+                legendType="none"
+                isAnimationActive={false}
+              />
+              <Area
+                type="monotone"
+                dataKey="bandWidth"
+                stackId="band"
+                stroke="rgba(34,197,94,0.2)"
+                strokeWidth={1}
+                strokeDasharray="3 3"
+                fill="url(#confBandGrad)"
+                dot={false}
+                legendType="none"
+                isAnimationActive={false}
+              />
+
+              <Line
+                type="monotone"
+                dataKey="actual"
+                stroke="#60a5fa"
+                strokeWidth={2.5}
+                dot={false}
+                connectNulls={false}
+                isAnimationActive
+                animationDuration={900}
+              />
+              <Line
+                type="monotone"
+                dataKey="predicted"
+                stroke="#34d399"
+                strokeWidth={2.5}
+                strokeDasharray="6 4"
+                dot={false}
+                connectNulls={false}
+                isAnimationActive
+                animationDuration={900}
+              />
+
+              {formattedToday && (
+                <ReferenceLine
+                  x={formattedToday}
+                  stroke="rgba(255,255,255,0.2)"
+                  strokeDasharray="4 4"
+                  label={{
+                    value: "Current candle",
+                    fill: "#94a3b8",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    position: "insideTopRight",
+                  }}
+                />
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
