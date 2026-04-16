@@ -4,12 +4,13 @@ analyze_accuracy.py — Analyze prediction vs actual price errors from Supabase
 from dotenv import load_dotenv
 load_dotenv()
 
-from app.database import supabase
+from app.database import get_supabase
 from app.services.asset_profile import format_prediction_target, parse_candle_timestamp, resolve_history_interval
 
 SYMBOLS = ["XAU/USD", "EUR/USD", "BTC/USD"]
 
 def run_analysis():
+    supabase = get_supabase()
     for sym in SYMBOLS:
         resp = supabase.table("predictions") \
             .select("predicted_for,predicted_price,actual_price,signal,confidence,created_at") \

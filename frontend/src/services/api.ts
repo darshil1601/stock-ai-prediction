@@ -2,7 +2,7 @@ export const BASE_URL = import.meta.env.VITE_API_BASE || 'https://darshil16-stoc
 
 // Helper for timeout
 const fetchWithTimeout = async (resource: RequestInfo, options: RequestInit & { timeout?: number } = {}) => {
-  const { timeout = 10000, ...opts } = options;
+  const { timeout = 30000, ...opts } = options;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {
