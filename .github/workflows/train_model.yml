@@ -55,20 +55,26 @@ jobs:
 
       - name: 💾 Commit and Push Trained Models
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Force add models (even if in .gitignore)
-          git add -f backend/app/models/*.h5 backend/app/models/*.pkl || true
-          
-          # Commit only if changes exist
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update trained models [skip ci]"
-            # Pull latest remote changes before pushing (avoid rejection)
-            git pull --rebase origin main
-            git push
-          else
-            echo "No model changes to commit."
-          fi
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            
+            # Initialize LFS to prevent "pointer" errors
+            git lfs install
+            
+            # Force add models (even if in .gitignore)
+            git add -f backend/app/models/*.h5 backend/app/models/*.pkl || true
+            
+            # Commit only if changes exist
+            if ! git diff --staged --quiet; then
+              git commit -m "chore: update trained models [skip ci]"
+              
+              # Pull latest remote changes and prefer our new models in case of conflict
+              git fetch origin main
+              git pull --rebase -X theirs origin main
+              
+              git push
+            else
+              echo "No model changes to commit."
+            fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
