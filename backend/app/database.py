@@ -26,14 +26,22 @@ KEY_ENV = "SUPABASE_SERVICE_ROLE_KEY"
 
 
 def get_supabase_creds() -> tuple[str, str]:
-    url = os.environ.get(URL_ENV)
-    key = os.environ.get(KEY_ENV)
+    # .strip() is added to handle common copy-paste errors with trailing/leading spaces
+    url = os.environ.get(URL_ENV, "").strip()
+    key = os.environ.get(KEY_ENV, "").strip()
 
     if not url or not key:
         missing = [name for name in (URL_ENV, KEY_ENV) if not os.environ.get(name)]
-        err_msg = f"Critical env missing: {', '.join(missing)}"
+        err_msg = (
+            f"CRITICAL: Supabase credentials ({', '.join(missing)}) are missing in environment. "
+            "Please check GitHub Repository Secrets and ensure no leading/trailing spaces exist."
+        )
         logger.error(err_msg)
         raise ValueError(err_msg)
+    
+    if not url.startswith("http"):
+        raise ValueError(f"Invalid Supabase URL: '{url}'. Must start with http:// or https://")
+
     return url, key
 
 
@@ -87,7 +95,7 @@ def _estimate_target_timestamp(row: dict, symbol: str) -> datetime | None:
             return None
         base = created_at.replace(minute=0, second=0, microsecond=0)
         return base + profile.target_step
-
+    
     raw_predicted_for = row.get("predicted_for")
     if not raw_predicted_for:
         return None

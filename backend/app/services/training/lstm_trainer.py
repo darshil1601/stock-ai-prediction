@@ -219,9 +219,10 @@ def train(symbol: str = "XAU/USD") -> None:
                 "epochs": best_epoch,
             },
         })
-        print(f"Model {version} metrics logged to Supabase.")
+        print(f"[Supabase] Model {version} metrics logged successfully for {symbol}.")
     except Exception as exc:
-        print(f"Database logging failed: {exc}")
+        print(f"CRITICAL: Database logging failed for {symbol}: {exc}")
+        print("Please ensure Supabase tables are created and Unique constraints are set for (symbol, date).")
 
     print(f"\n[SUCCESS] Training complete for {symbol}")
     print("=" * 60)
