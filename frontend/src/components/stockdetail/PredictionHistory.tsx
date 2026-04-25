@@ -47,10 +47,15 @@ function formatTargetLabel(item: HistoryItem, showTime: boolean): string {
   }
 
   if (!item.predicted_for) return "-";
-  return new Date(item.predicted_for).toLocaleDateString("en-IN", {
+
+  const dateStr = new Date(item.predicted_for).toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
   });
+
+  // BTC 4H zone record with no time = legacy daily-mode transition record
+  if (showTime) return `${dateStr} (Daily)`;
+  return dateStr;
 }
 
 export default function PredictionHistory({ symbol = "gold" }: Props) {
