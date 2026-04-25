@@ -4,7 +4,52 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 
 
-BTC_HOURLY_CUTOVER_DATE = date(2026, 4, 16)
+BTC_4H_CUTOVER_DATE = date(2026, 4, 16)
+
+
+# ── Market Holiday Calendar (NYSE/COMEX/Forex) 2025-2027 ─────────────────────
+# XAU/USD and EUR/USD follow these closures. BTC trades 24/7 (no holidays).
+MARKET_HOLIDAYS: frozenset[date] = frozenset([
+    # 2025
+    date(2025, 1, 1),   # New Year's Day
+    date(2025, 1, 20),  # MLK Day
+    date(2025, 2, 17),  # Presidents' Day
+    date(2025, 4, 18),  # Good Friday
+    date(2025, 5, 26),  # Memorial Day
+    date(2025, 7, 4),   # Independence Day
+    date(2025, 9, 1),   # Labor Day
+    date(2025, 11, 27), # Thanksgiving
+    date(2025, 12, 25), # Christmas
+    # 2026
+    date(2026, 1, 1),   # New Year's Day
+    date(2026, 1, 19),  # MLK Day
+    date(2026, 2, 16),  # Presidents' Day
+    date(2026, 4, 3),   # Good Friday
+    date(2026, 4, 6),   # Easter Monday (Forex/Gold closes)
+    date(2026, 5, 25),  # Memorial Day
+    date(2026, 7, 3),   # Independence Day (observed, Jul 4 = Saturday)
+    date(2026, 9, 7),   # Labor Day
+    date(2026, 11, 26), # Thanksgiving
+    date(2026, 12, 25), # Christmas
+    # 2027
+    date(2027, 1, 1),   # New Year's Day
+    date(2027, 1, 18),  # MLK Day
+    date(2027, 2, 15),  # Presidents' Day
+    date(2027, 3, 26),  # Good Friday
+    date(2027, 5, 31),  # Memorial Day
+    date(2027, 7, 5),   # Independence Day (observed)
+    date(2027, 9, 6),   # Labor Day
+    date(2027, 11, 25), # Thanksgiving
+    date(2027, 12, 24), # Christmas (observed, Dec 25 = Saturday)
+])
+
+
+def is_market_holiday(d: date, symbol: str) -> bool:
+    """Returns True if the given date is a market holiday for this symbol."""
+    # BTC trades 24/7 — no holidays
+    if "BTC" in symbol.upper():
+        return False
+    return d in MARKET_HOLIDAYS
 
 
 @dataclass(frozen=True)
@@ -96,18 +141,18 @@ ASSET_PROFILES: dict[str, AssetProfile] = {
         symbol="BTC/USD",
         asset_class="crypto",
         trades_weekends=True,
-        min_signal_return=0.0010,      # Lowered: was 0.0025 — 1h BTC moves are smaller
-        signal_volatility_fraction=0.10,  # Lowered: was 0.18
-        model_weight=0.82,             # Slightly increased: was 0.80
+        min_signal_return=0.0015,      # Slightly higher for 4h moves
+        signal_volatility_fraction=0.10,
+        model_weight=0.82,
         short_window=12,
         medium_window=72,
         volatility_cap_multiplier=1.50,
-        min_return_cap=0.0015,         # Lowered: was 0.0030
-        max_return_cap=0.0300,
+        min_return_cap=0.0020,
+        max_return_cap=0.0400,         # 4h can move more than 1h
         confidence_band_multiplier=1.25,
-        history_interval="1h",
-        prediction_label="Predicted Next 1H Close",
-        target_step=timedelta(hours=1),
+        history_interval="4h",         # Changed from 1h → 4h
+        prediction_label="Predicted Next 4H Close",
+        target_step=timedelta(hours=4),  # Changed from 1h → 4h
     ),
 }
 
@@ -153,10 +198,10 @@ def resolve_history_interval(
     if profile.history_interval == "1day":
         return "1day"
 
-    # BTC hourly rollout starts only from the configured cutover date.
+    # BTC 4H rollout starts only from the configured cutover date.
     if symbol == "BTC/USD":
         ref_date = _coerce_reference_date(reference) or datetime.now(timezone.utc).date()
-        return "1h" if ref_date >= BTC_HOURLY_CUTOVER_DATE else "1day"
+        return "4h" if ref_date >= BTC_4H_CUTOVER_DATE else "1day"
 
     return profile.history_interval
 
@@ -209,10 +254,12 @@ def next_trading_day(symbol: str, current_date: date) -> date:
     profile = get_asset_profile(symbol)
     next_date = current_date + timedelta(days=1)
 
+    # BTC trades 24/7 — skip all checks
     if profile.trades_weekends:
         return next_date
 
-    while next_date.weekday() >= 5:
+    # Skip weekends AND market holidays
+    while next_date.weekday() >= 5 or next_date in MARKET_HOLIDAYS:
         next_date += timedelta(days=1)
 
     return next_date
