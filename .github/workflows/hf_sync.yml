@@ -84,20 +84,17 @@ jobs:
           REPO_TYPE = "space"
           LOCAL_MODELS_DIR = "backend/app/models"
           HF_MODELS_DIR = "backend/app/models"
-          KEEP_VERSIONS = 3  # How many old versions to keep per symbol
+          KEEP_VERSIONS = 3
           SYMBOLS = ["btcusd", "eurusd", "xauusd"]
 
           # ── Step 1: Cleanup old versions on HF Space ──────────────────────────
           print("🧹 Cleaning up old model versions on HF Space...")
           try:
-              all_hf_files = api.list_repo_files(
+              all_hf_files = list(api.list_repo_files(
                   repo_id=REPO_ID, repo_type=REPO_TYPE,
                   token=os.environ["HF_TOKEN"]
-              )
-              all_hf_files = list(all_hf_files)
-
+              ))
               for slug in SYMBOLS:
-                  # Versioned models e.g. btcusd_model_v20260416131908.h5
                   ver_models = sorted([
                       f for f in all_hf_files
                       if re.match(rf"backend/app/models/{slug}_model_v\d+\.h5$", f)
@@ -106,9 +103,7 @@ jobs:
                       f for f in all_hf_files
                       if re.match(rf"backend/app/models/{slug}_scaler_v\d+\.pkl$", f)
                   ])
-
-                  to_delete = ver_models[:-KEEP_VERSIONS] + ver_scalers[:-KEEP_VERSIONS]
-                  for old_file in to_delete:
+                  for old_file in ver_models[:-KEEP_VERSIONS] + ver_scalers[:-KEEP_VERSIONS]:
                       try:
                           api.delete_file(
                               path_in_repo=old_file,
@@ -119,20 +114,18 @@ jobs:
                           print(f"  🗑️  Deleted from HF: {old_file}")
                       except Exception as e:
                           print(f"  ⚠️  Could not delete {old_file}: {e}")
-
           except Exception as e:
               print(f"⚠️  HF cleanup skipped (non-fatal): {e}")
 
-          # ── Step 2: Upload ALL current local model files in ONE single commit ──
+          # ── Step 2: Upload ALL files in ONE single batch commit ────────────────
           model_files = (
               glob.glob(f"{LOCAL_MODELS_DIR}/*.h5") +
               glob.glob(f"{LOCAL_MODELS_DIR}/*.pkl")
           )
-
           if not model_files:
               print("⚠️  No model files found to upload.")
           else:
-              print(f"📤 Uploading {len(model_files)} model file(s) as a SINGLE batch commit...")
+              print(f"📤 Uploading {len(model_files)} file(s) as a SINGLE batch commit...")
               api.upload_folder(
                   folder_path=LOCAL_MODELS_DIR,
                   path_in_repo=HF_MODELS_DIR,
@@ -142,5 +135,5 @@ jobs:
                   allow_patterns=["*.h5", "*.pkl"],
                   commit_message="chore: batch update trained models",
               )
-              print(f"✅ Batch upload complete! {len(model_files)} files pushed in 1 commit.")
+              print(f"✅ Batch upload complete! {len(model_files)} files in 1 commit.")
           EOF
