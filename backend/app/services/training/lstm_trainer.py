@@ -57,46 +57,6 @@ def _validate_artifact_files(model_path: str, scaler_path: str) -> None:
     joblib.load(scaler_path)
 
 
-def _cleanup_old_artifacts(symbol: str, keep: int = 3) -> None:
-    """
-    Delete old versioned model/scaler files, keeping only the `keep` newest ones.
-    Generic (non-versioned) files like btcusd_lstm_model.h5 are never deleted.
-    """
-    import glob
-    slug = symbol.replace("/", "").lower()
-    models_dir = get_models_dir()
-
-    # Find all versioned model files for this symbol
-    versioned_models = sorted(
-        glob.glob(os.path.join(models_dir, f"{slug}_model_v*.h5"))
-    )  # sorted by name = sorted by timestamp (since version is datetime)
-
-    versioned_scalers = sorted(
-        glob.glob(os.path.join(models_dir, f"{slug}_scaler_v*.pkl"))
-    )
-
-    # Delete oldest ones, keep only latest `keep`
-    for old_model in versioned_models[:-keep]:
-        try:
-            os.remove(old_model)
-            print(f"[Cleanup] Deleted old model: {os.path.basename(old_model)}")
-        except Exception as e:
-            print(f"[Cleanup] Warning: Could not delete {old_model}: {e}")
-
-    for old_scaler in versioned_scalers[:-keep]:
-        try:
-            os.remove(old_scaler)
-            print(f"[Cleanup] Deleted old scaler: {os.path.basename(old_scaler)}")
-        except Exception as e:
-            print(f"[Cleanup] Warning: Could not delete {old_scaler}: {e}")
-
-    remaining = max(0, len(versioned_models) - keep)
-    if remaining > 0:
-        print(f"[Cleanup] Removed {remaining} old version(s) for {symbol}. Keeping latest {keep}.")
-    else:
-        print(f"[Cleanup] No old versions to remove for {symbol}.")
-
-
 def _save_artifacts_atomic(symbol: str, version: str, model, bundle: DatasetBundle) -> tuple[str, str]:
     slug = symbol.replace("/", "").lower()
     models_dir = get_models_dir()
@@ -229,9 +189,6 @@ def train(symbol: str = "XAU/USD") -> None:
 
     print(f"Model saved -> {model_path}")
     print(f"Scaler saved -> {scaler_path}")
-
-    # Auto-cleanup: keep only the 3 latest versioned models per symbol
-    _cleanup_old_artifacts(symbol, keep=3)
 
     try:
         from app.database import save_market_prices, save_model_info
