@@ -497,12 +497,14 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
 
             if interval_for_target != "1day":
                 now_utc = datetime.now(timezone.utc)
-                lookback_iso = (now_utc - timedelta(minutes=75)).isoformat()
+                # 50-min window: avoids duplicates within same candle only
+                lookback_iso = (now_utc - timedelta(minutes=50)).isoformat()
                 recent_unreconciled = (
                     supabase.table("predictions")
-                    .select("id, actual_price, created_at")
+                    .select("id, actual_price, created_at, predicted_for")
                     .eq("symbol", symbol)
                     .is_("actual_price", "null")
+                    .eq("predicted_for", target_date)
                     .gte("created_at", lookback_iso)
                     .order("created_at", desc=True)
                     .limit(1)
