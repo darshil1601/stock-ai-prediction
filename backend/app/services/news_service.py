@@ -8,6 +8,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+import time
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -70,6 +72,19 @@ def fetch_newsapi_articles(max_results: int = 40) -> list[dict[str, Any]]:
     return out
 
 
+_GDELT_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+}
+
+_GDELT_MAX_RETRIES = 3
+_GDELT_BACKOFF_BASE = 2  # seconds; doubles each retry
+
+
 def fetch_gdelt_articles(max_records: int = 30) -> list[dict[str, Any]]:
     params = {
         "query": NEWS_QUERY,
@@ -77,12 +92,31 @@ def fetch_gdelt_articles(max_records: int = 30) -> list[dict[str, Any]]:
         "maxrecords": str(min(max_records, 250)),
         "format": "json",
     }
-    try:
-        r = requests.get(GDELT_DOC_URL, params=params, timeout=30)
-        r.raise_for_status()
-        data = r.json()
-    except Exception as e:
-        logger.warning("[GDELT] fetch failed: %s", e)
+    last_exc: Exception | None = None
+    for attempt in range(1, _GDELT_MAX_RETRIES + 1):
+        try:
+            r = requests.get(
+                GDELT_DOC_URL,
+                params=params,
+                headers=_GDELT_HEADERS,
+                timeout=30,
+            )
+            r.raise_for_status()
+            data = r.json()
+            break  # success
+        except (ConnectionResetError, requests.exceptions.ConnectionError) as e:
+            last_exc = e
+            wait = _GDELT_BACKOFF_BASE ** attempt
+            logger.warning(
+                "[GDELT] connection reset (attempt %d/%d), retrying in %ds — %s",
+                attempt, _GDELT_MAX_RETRIES, wait, e,
+            )
+            time.sleep(wait)
+        except Exception as e:
+            logger.warning("[GDELT] fetch failed: %s", e)
+            return []
+    else:
+        logger.warning("[GDELT] all %d retries exhausted: %s", _GDELT_MAX_RETRIES, last_exc)
         return []
 
     articles = data.get("articles") or []
