@@ -33,12 +33,19 @@ def fetch_historical_data(
     """
     candle_interval = interval or resolve_history_interval(symbol, datetime.now(timezone.utc))
 
+    # Twelve Data naturally aligns 4h candles to NY midnight (05:00 UTC).
+    # To match TradingView (00:00 UTC alignment for crypto), we fetch 1h and resample.
+    is_crypto_4h = "BTC" in symbol and candle_interval == "4h"
+    fetch_interval = "1h" if is_crypto_4h else candle_interval
+    fetch_size = min(5000, outputsize * 4) if is_crypto_4h else outputsize
+
     url = f"{BASE_URL}/time_series"
     params = {
         "symbol": symbol,
-        "interval": candle_interval,
-        "outputsize": outputsize,
+        "interval": fetch_interval,
+        "outputsize": fetch_size,
         "apikey": API_KEY,
+        "timezone": "UTC"
     }
     try:
         resp = requests.get(url, params=params, timeout=30)
@@ -64,7 +71,28 @@ def fetch_historical_data(
         df["volume"] = 0
 
     df = df.rename(columns={"datetime": "date"})
+    
+    if is_crypto_4h:
+        df["date"] = pd.to_datetime(df["date"])
+        df.set_index("date", inplace=True)
+        # Resample 1h to 4h aligned to 00:00 UTC (TradingView standard)
+        resampled = df.resample("4h", closed="left", label="left").agg({
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum"
+        })
+        resampled.dropna(inplace=True)
+        df = resampled.reset_index()
+        df["date"] = df["date"].dt.strftime("%Y-%m-%d %H:%M:%S")
+
     df["date"] = df["date"].astype(str)
+    
+    # If we fetched extra data to resample, trim back to requested size
+    if is_crypto_4h and len(df) > outputsize:
+        df = df.tail(outputsize).reset_index(drop=True)
+        
     return df[["date", "open", "high", "low", "close", "volume"]]
 
 

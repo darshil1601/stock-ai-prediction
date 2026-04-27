@@ -467,9 +467,11 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
         from app.database import save_intelligence_log, save_prediction, supabase
 
         target_time = payload["prediction_target_time"]
-        target_date = str(target_time)[:10] if target_time else None
-        if target_date:
-            interval_for_target = resolve_history_interval(symbol, target_date)
+        if target_time:
+            interval_for_target = resolve_history_interval(symbol, target_time)
+            # Full ISO for intraday, YYYY-MM-DD for daily
+            predicted_for_value = target_time if interval_for_target != "1day" else target_time[:10]
+            target_date = predicted_for_value
             mi = payload["market_intelligence"]
             nc = int(mi.get("news_count") or 0)
             score_0_100 = int(round((float(mi["sentiment_score"]) + 1.0) * 50.0)) if nc else 50
@@ -496,16 +498,12 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
             }
 
             if interval_for_target != "1day":
-                now_utc = datetime.now(timezone.utc)
-                # 50-min window: avoids duplicates within same candle only
-                lookback_iso = (now_utc - timedelta(minutes=50)).isoformat()
                 recent_unreconciled = (
                     supabase.table("predictions")
                     .select("id, actual_price, created_at, predicted_for")
                     .eq("symbol", symbol)
                     .is_("actual_price", "null")
                     .eq("predicted_for", target_date)
-                    .gte("created_at", lookback_iso)
                     .order("created_at", desc=True)
                     .limit(1)
                     .execute()
@@ -538,6 +536,7 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
                 else:
                     save_prediction(prediction_record)
                     logger.info("[%s] Saved new prediction for %s", symbol, target_date)
+
 
     except Exception as exc:
         logger.error("Error in Supabase record keeping (%s): %s", symbol, exc)

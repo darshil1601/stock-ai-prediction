@@ -88,19 +88,40 @@ def _prediction_interval_for_row(symbol: str, row: dict) -> str:
 
 def _estimate_target_timestamp(row: dict, symbol: str) -> datetime | None:
     profile = get_asset_profile(symbol)
+    raw_predicted_for = row.get("predicted_for")
+
+    # 1. Try to parse as full ISO timestamp first (new intraday format)
+    if raw_predicted_for and len(str(raw_predicted_for)) > 10:
+        ts = _parse_iso_timestamp(raw_predicted_for)
+        if ts:
+            return ts
+
+    # 2. Check interval to decide between legacy intraday or daily logic
     row_interval = _prediction_interval_for_row(symbol, row)
     if row_interval != "1day":
         created_at = _parse_iso_timestamp(row.get("created_at"))
         if not created_at:
             return None
-        base = created_at.replace(minute=0, second=0, microsecond=0)
-        return base + profile.target_step
+        
+        # TradingView BTC 4H blocks (aligned to 00:00 UTC): 00:00, 04:00, 08:00, 12:00, 16:00, 20:00
+        if profile.history_interval == "4h":
+            curr = created_at.replace(minute=0, second=0, microsecond=0)
+            if created_at.minute > 0 or created_at.second > 0:
+                curr += timedelta(hours=1)
+            while curr.hour % 4 != 0:
+                curr += timedelta(hours=1)
+            return curr
+        else:
+            base = created_at.replace(minute=0, second=0, microsecond=0)
+            return base + profile.target_step
     
-    raw_predicted_for = row.get("predicted_for")
+    # 3. Daily logic: Parse YYYY-MM-DD and combine with market close time
     if not raw_predicted_for:
         return None
     try:
-        target_day = datetime.strptime(str(raw_predicted_for), "%Y-%m-%d").date()
+        # Just in case it's a full timestamp but resolved as 1day, take first 10
+        date_part = str(raw_predicted_for)[:10]
+        target_day = datetime.strptime(date_part, "%Y-%m-%d").date()
     except ValueError:
         return None
 

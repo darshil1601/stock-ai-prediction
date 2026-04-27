@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 
 
-BTC_4H_CUTOVER_DATE = date(2026, 4, 16)
+BTC_4H_CUTOVER_DATE = date(2026, 4, 26)
 
 
 # ── Market Holiday Calendar (NYSE/COMEX/Forex) 2025-2027 ─────────────────────
