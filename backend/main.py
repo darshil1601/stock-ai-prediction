@@ -287,7 +287,6 @@ port = int(os.environ.get("PORT", 7860))
 
 # Event-triggered retrain endpoint
 @app.post("/retrain")
-@app.get("/healthz") # Health check for Hugging Face
 def trigger_retrain():
     """
     POST /retrain — Manual or webhook-triggered full LSTM retrain.
@@ -299,11 +298,6 @@ def trigger_retrain():
         return {"error": "Auto-retrain disabled (ENABLE_AUTO_RETRAIN=1)"}
     threading.Thread(target=retrain_model, args=(False,), daemon=True).start()
     return {"status": "retrain started async (non-blocking)"}
-
-# Cloud healthz (Railway probes)
-@app.get("/healthz")
-def healthz():
-    return {"status": "ok", "deploy": "production-ready"}
 
 
 # ── CORS — restricted to known frontend origins ───────

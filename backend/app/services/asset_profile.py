@@ -190,6 +190,28 @@ def _coerce_reference_date(reference: str | datetime | date | None) -> date | No
         return None
 
 
+def get_market_close_time_utc(symbol: str, target_date: date) -> time:
+    """Dynamically determine market close time in UTC, accounting for US DST (New York 17:00)."""
+    profile = get_asset_profile(symbol)
+    
+    if profile.asset_class == "crypto":
+        # Crypto always closes at exactly Midnight UTC, regardless of seasons
+        return time(0, 0, tzinfo=timezone.utc)
+        
+    if profile.asset_class in ("forex", "commodity"):
+        try:
+            import zoneinfo
+            ny_tz = zoneinfo.ZoneInfo("America/New_York")
+            dt_ny = datetime.combine(target_date, time(17, 0)).replace(tzinfo=ny_tz)
+            return dt_ny.astimezone(timezone.utc).timetz()
+        except Exception:
+            pass  # Fallback to static if zoneinfo not available
+            
+    close_hour = profile.market_close_hour_utc if profile.market_close_hour_utc is not None else 22
+    close_minute = profile.market_close_minute_utc if profile.market_close_minute_utc is not None else 0
+    return time(close_hour, close_minute, tzinfo=timezone.utc)
+
+
 def resolve_history_interval(
     symbol: str,
     reference: str | datetime | date | None = None,
@@ -272,12 +294,8 @@ def next_prediction_timestamp(symbol: str, current_timestamp: datetime) -> datet
 
     if interval == "1day":
         next_day = next_trading_day(symbol, current_utc.date())
-        close_hour = profile.market_close_hour_utc or 22
-        close_minute = profile.market_close_minute_utc or 0
-        return datetime.combine(
-            next_day,
-            time(close_hour, close_minute, tzinfo=timezone.utc),
-        )
+        close_time = get_market_close_time_utc(symbol, next_day)
+        return datetime.combine(next_day, close_time)
 
     return current_utc + resolve_target_step(symbol, current_utc)
 
@@ -293,14 +311,9 @@ def is_partial_candle(
     interval = resolve_history_interval(symbol, current_utc)
 
     if interval == "1day":
-        if candle_utc.date() != current_utc.date():
-            return False
-        close_hour = profile.market_close_hour_utc or 22
-        close_minute = profile.market_close_minute_utc or 0
-        cutoff = datetime.combine(
-            current_utc.date(),
-            time(close_hour, close_minute, tzinfo=timezone.utc),
-        ) + timedelta(minutes=profile.candle_confirmation_buffer_minutes)
+        close_time = get_market_close_time_utc(symbol, candle_utc.date())
+        expected_close = datetime.combine(candle_utc.date(), close_time)
+        cutoff = expected_close + timedelta(minutes=profile.candle_confirmation_buffer_minutes)
         return current_utc < cutoff
 
     return current_utc < (candle_utc + resolve_target_step(symbol, current_utc))
