@@ -125,17 +125,20 @@ def _estimate_target_timestamp(row: dict, symbol: str) -> datetime | None:
     except ValueError:
         return None
 
-    close_hour = profile.market_close_hour_utc if profile.market_close_hour_utc is not None else 22
-    close_minute = profile.market_close_minute_utc if profile.market_close_minute_utc is not None else 0
-    return datetime.combine(target_day, time(close_hour, close_minute), tzinfo=timezone.utc)
+    close_time = get_market_close_time_utc(symbol, target_day)
+    return datetime.combine(target_day, close_time)
 
 
 def _first_close_at_or_after(
     candles: list[tuple[datetime, float]],
-    target_timestamp: datetime,
+    target_close_timestamp: datetime,
 ) -> float | None:
+    # Intraday candles are fetched as 1H interval. 
+    # TradingView labels candles by OPEN time. A 1H candle opening at ts closes at ts + 1 hour.
+    # We want the close price exactly at target_close_timestamp.
     for ts, close in candles:
-        if ts >= target_timestamp:
+        candle_close_time = ts + timedelta(hours=1)
+        if candle_close_time >= target_close_timestamp:
             return close
     return None
 

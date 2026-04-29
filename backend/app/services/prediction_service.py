@@ -85,9 +85,9 @@ def _predict_next_return(symbol: str, df: pd.DataFrame) -> float:
     X = scaled[-WINDOW:].reshape(1, WINDOW, len(FEATURES))
     pred_scaled = float(model.predict(X, verbose=0)[0][0])
 
-    dummy = np.zeros((1, len(FEATURES)))
-    dummy[0, 1] = pred_scaled
-    inv = scaler.inverse_transform(dummy)
+    unscale_matrix = np.zeros((1, len(FEATURES)))
+    unscale_matrix[0, 1] = pred_scaled
+    inv = scaler.inverse_transform(unscale_matrix)
     pred_return = float(inv[0, 1])
 
     if not np.isfinite(pred_return):

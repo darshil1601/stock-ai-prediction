@@ -102,32 +102,56 @@ def run_cache_clear_job():
 
 def run_daily_predictions():
     """
-    Auto-run LSTM predictions for all symbols daily after market open.
-    Ensures fresh BUY/SELL/HOLD signals are available without user intervention.
-    Runs at 05:30 UTC = 11:00 IST (after Asian open, before EU open).
+    Auto-run LSTM predictions for daily assets (Gold, EUR/USD).
+    Runs at 01:30 UTC.
     """
     from app.services.prediction_service import run_prediction
-    SYMBOLS = ["XAU/USD", "EUR/USD", "BTC/USD"]
+    SYMBOLS = ["XAU/USD", "EUR/USD"]
 
-    logger.info("[Scheduler] Prediction refresh START")
+    logger.info("[Scheduler] Daily prediction refresh START (Macro/Forex)")
     if not wait_for_training(timeout=600):
         logger.warning("[Scheduler] Prediction refresh skipped because training is still active.")
         return
 
     for sym in SYMBOLS:
         try:
-            # Clear cache first so fresh data is used
             from app import cache as redis_cache
             cache_key = f"predict:{sym.replace('/', '').lower()}"
             redis_cache._redis.delete(cache_key)
-            # Run fresh prediction
             result = run_prediction(sym)
             signal = result.get("signal", "?")
             price  = result.get("next_price", "?")
             logger.info(f"[Scheduler] Daily predict OK — {sym}: signal={signal}, next={price}")
         except Exception as e:
             logger.error(f"[Scheduler] Daily predict FAILED for {sym}: {e}", exc_info=True)
-    logger.info("[Scheduler] Prediction refresh END")
+    logger.info("[Scheduler] Daily prediction refresh END")
+
+
+def run_intraday_predictions():
+    """
+    Auto-run LSTM predictions for intraday assets (BTC 4H).
+    Runs every 4 hours (00:05, 04:05, 08:05, 12:05, 16:05, 20:05 UTC).
+    """
+    from app.services.prediction_service import run_prediction
+    SYMBOLS = ["BTC/USD"]
+
+    logger.info("[Scheduler] 4H Intraday prediction refresh START (Crypto)")
+    if not wait_for_training(timeout=600):
+        logger.warning("[Scheduler] Prediction refresh skipped because training is still active.")
+        return
+
+    for sym in SYMBOLS:
+        try:
+            from app import cache as redis_cache
+            cache_key = f"predict:{sym.replace('/', '').lower()}"
+            redis_cache._redis.delete(cache_key)
+            result = run_prediction(sym)
+            signal = result.get("signal", "?")
+            price  = result.get("next_price", "?")
+            logger.info(f"[Scheduler] 4H predict OK — {sym}: signal={signal}, next={price}")
+        except Exception as e:
+            logger.error(f"[Scheduler] 4H predict FAILED for {sym}: {e}", exc_info=True)
+    logger.info("[Scheduler] 4H Intraday prediction refresh END")
 
 
 def run_news_ingestion_job():
@@ -209,12 +233,22 @@ scheduler.add_job(
 )
 
 # Job 4: Daily auto-prediction at 01:30 UTC = 07:00 AM IST (Early Morning)
-# Runs LSTM for all symbols so fresh BUY/SELL/HOLD signal is always ready
+# Runs LSTM for Gold and EUR/USD
 scheduler.add_job(
     run_daily_predictions,
     CronTrigger(hour=1, minute=30, timezone=timezone.utc),
     id="daily_prediction_0130_utc",
-    name="Daily LSTM Prediction — All Symbols (UTC)",
+    name="Daily LSTM Prediction — Macro/Forex (UTC)",
+    replace_existing=True,
+)
+
+# Job 4.1: 4H auto-prediction for Crypto exactly on the 4H mark
+# Runs at 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC
+scheduler.add_job(
+    run_intraday_predictions,
+    CronTrigger(hour="0,4,8,12,16,20", minute=0, timezone=timezone.utc),
+    id="intraday_prediction_4h_utc",
+    name="4H LSTM Prediction — Crypto (UTC)",
     replace_existing=True,
 )
 
