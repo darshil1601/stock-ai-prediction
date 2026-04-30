@@ -105,7 +105,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
   }, [symbol]);
 
   useEffect(() => {
-    api.reconcileHistory().catch(() => {});
+    api.reconcileHistory().catch(() => { });
   }, []);
 
   if (loading) {
@@ -119,7 +119,27 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
     );
   }
 
-  if (!history.length) return null;
+  if (!history.length && !loading) {
+    return (
+      <div id="performance-audit" className="bg-[#0b1220] border border-slate-800 rounded-2xl p-10 flex flex-col items-center justify-center gap-4 shadow-2xl">
+        <div className="w-10 h-10 rounded-full bg-slate-800/50 flex items-center justify-center border border-slate-700/50">
+          <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div className="text-center">
+          <h3 className="text-slate-300 text-xs font-black uppercase tracking-widest mb-1">No Audit History Found</h3>
+          <p className="text-slate-500 text-[10px] uppercase font-bold">Waiting for first prediction record...</p>
+        </div>
+        <button 
+          onClick={handleReconcile}
+          className="mt-2 px-4 py-2 rounded-xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase hover:bg-indigo-600/20 transition-all"
+        >
+          {reconciling ? "Syncing..." : "Sync Database"}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-[#0b1220] border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-2xl relative overflow-hidden group">
@@ -231,9 +251,8 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
                         </span>
                         {diffPct != null && (
                           <span
-                            className={`text-[9px] font-black uppercase tracking-tighter ${
-                              diffPct < 1.5 ? "text-emerald-500/60" : "text-slate-600"
-                            }`}
+                            className={`text-[9px] font-black uppercase tracking-tighter ${diffPct < 1.5 ? "text-emerald-500/60" : "text-slate-600"
+                              }`}
                           >
                             Delta {diffPct.toFixed(2)}% Off
                           </span>
@@ -248,13 +267,12 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
                   </td>
                   <td className="py-4 px-4 border-y border-slate-800/50 hidden sm:table-cell">
                     <span
-                      className={`px-2 py-0.5 rounded-lg text-[9px] font-black tracking-widest border uppercase transition-colors ${
-                        item.signal === "BUY"
+                      className={`px-2 py-0.5 rounded-lg text-[9px] font-black tracking-widest border uppercase transition-colors ${item.signal === "BUY"
                           ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/20 group-hover:bg-emerald-500/10"
                           : item.signal === "SELL"
-                          ? "bg-rose-500/5 text-rose-400 border-rose-500/20 group-hover:bg-rose-500/10"
-                          : "bg-slate-700/10 text-slate-500 border-slate-800"
-                      }`}
+                            ? "bg-rose-500/5 text-rose-400 border-rose-500/20 group-hover:bg-rose-500/10"
+                            : "bg-slate-700/10 text-slate-500 border-slate-800"
+                        }`}
                     >
                       {item.signal}
                     </span>

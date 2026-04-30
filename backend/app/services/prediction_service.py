@@ -477,68 +477,76 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
             score_0_100 = int(round((float(mi["sentiment_score"]) + 1.0) * 50.0)) if nc else 50
             score_0_100 = max(0, min(100, score_0_100))
 
-            save_intelligence_log({
-                "symbol": symbol,
-                "fear_greed_score": score_0_100,
-                "fear_greed_label": mi["sentiment_label"],
-                "global_volatility_score": mi["spike_ratio"],
-            })
+            # 1. Save Intelligence Log (Fear/Greed)
+            try:
+                save_intelligence_log({
+                    "symbol": symbol,
+                    "fear_greed_score": score_0_100,
+                    "fear_greed_label": mi["sentiment_label"],
+                    "global_volatility_score": mi["spike_ratio"],
+                })
+            except Exception as e:
+                logger.warning("[%s] Failed to save intelligence log: %s", symbol, e)
 
+            # 2. Prepare Prediction Record
             prediction_record = {
                 "symbol": symbol,
                 "predicted_price": payload["prediction_value"],
                 "confidence": payload["confidence"],
                 "signal": payload["signal"],
                 "predicted_for": target_date,
-                "model_version": payload["model_version"],
-                "market_alert": payload["market_intelligence"]["market_alert"],
-                "fear_greed_score": score_0_100,
-                "volatility_ratio": payload["market_intelligence"]["spike_ratio"],
-                "warnings": payload["market_intelligence"]["warnings"],
             }
+            
+            # Optional fields - add only if they don't break the insert
+            # You can add more fields here once you confirm they exist in Supabase
+            if payload.get("model_version"):
+                prediction_record["model_version"] = payload["model_version"]
 
-            if interval_for_target != "1day":
-                recent_unreconciled = (
-                    supabase.table("predictions")
-                    .select("id, actual_price, created_at, predicted_for")
-                    .eq("symbol", symbol)
-                    .is_("actual_price", "null")
-                    .eq("predicted_for", target_date)
-                    .order("created_at", desc=True)
-                    .limit(1)
-                    .execute()
-                )
-                if recent_unreconciled.data:
-                    pred_id = recent_unreconciled.data[0]["id"]
-                    supabase.table("predictions").update(prediction_record).eq("id", pred_id).execute()
-                    logger.info("[%s] Updated latest intraday prediction %s", symbol, pred_id)
-                else:
-                    save_prediction(prediction_record)
-                    logger.info("[%s] Saved new intraday prediction for %s", symbol, target_date)
-            else:
-                all_existing = (
-                    supabase.table("predictions")
-                    .select("id, actual_price")
-                    .eq("symbol", symbol)
-                    .eq("predicted_for", target_date)
-                    .order("created_at", desc=True)
-                    .execute()
-                )
-
-                if all_existing.data:
-                    unreconciled = [row for row in all_existing.data if row.get("actual_price") is None]
-                    if unreconciled:
-                        pred_id = unreconciled[0]["id"]
+            # 3. Insert or Update Prediction
+            try:
+                if interval_for_target != "1day":
+                    recent_unreconciled = (
+                        supabase.table("predictions")
+                        .select("id")
+                        .eq("symbol", symbol)
+                        .is_("actual_price", "null")
+                        .eq("predicted_for", target_date)
+                        .order("created_at", desc=True)
+                        .limit(1)
+                        .execute()
+                    )
+                    if recent_unreconciled.data:
+                        pred_id = recent_unreconciled.data[0]["id"]
                         supabase.table("predictions").update(prediction_record).eq("id", pred_id).execute()
-                        logger.info("[%s] Updated prediction %s for %s", symbol, pred_id, target_date)
+                        logger.info("[%s] Updated latest intraday prediction %s", symbol, pred_id)
                     else:
-                        logger.info("[%s] Prediction for %s already reconciled, skipping insert", symbol, target_date)
+                        save_prediction(prediction_record)
+                        logger.info("[%s] Saved new intraday prediction for %s", symbol, target_date)
                 else:
-                    save_prediction(prediction_record)
-                    logger.info("[%s] Saved new prediction for %s", symbol, target_date)
+                    all_existing = (
+                        supabase.table("predictions")
+                        .select("id, actual_price")
+                        .eq("symbol", symbol)
+                        .eq("predicted_for", target_date)
+                        .order("created_at", desc=True)
+                        .execute()
+                    )
 
+                    if all_existing.data:
+                        unreconciled = [row for row in all_existing.data if row.get("actual_price") is None]
+                        if unreconciled:
+                            pred_id = unreconciled[0]["id"]
+                            supabase.table("predictions").update(prediction_record).eq("id", pred_id).execute()
+                            logger.info("[%s] Updated prediction %s for %s", symbol, pred_id, target_date)
+                        else:
+                            logger.info("[%s] Prediction for %s already reconciled, skipping insert", symbol, target_date)
+                    else:
+                        save_prediction(prediction_record)
+                        logger.info("[%s] Saved new prediction for %s", symbol, target_date)
+            except Exception as e:
+                logger.error("[%s] Database prediction save failed: %s", symbol, e)
 
     except Exception as exc:
-        logger.error("Error in Supabase record keeping (%s): %s", symbol, exc)
+        logger.error("Critical error in Supabase record keeping (%s): %s", symbol, exc)
 
     return payload
