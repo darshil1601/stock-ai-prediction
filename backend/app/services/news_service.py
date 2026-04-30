@@ -104,11 +104,13 @@ def fetch_gdelt_articles(max_records: int = 30) -> list[dict[str, Any]]:
             r.raise_for_status()
             data = r.json()
             break  # success
-        except (ConnectionResetError, requests.exceptions.ConnectionError) as e:
+        except (ConnectionResetError, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
             last_exc = e
             wait = _GDELT_BACKOFF_BASE ** attempt
+            if isinstance(e, requests.exceptions.HTTPError) and e.response.status_code == 429:
+                wait = 15  # Handle 429 Too Many Requests
             logger.warning(
-                "[GDELT] connection reset (attempt %d/%d), retrying in %ds — %s",
+                "[GDELT] connection failed (attempt %d/%d), retrying in %ds — %s",
                 attempt, _GDELT_MAX_RETRIES, wait, e,
             )
             time.sleep(wait)

@@ -99,6 +99,8 @@ def insert_news_sentiment(record: dict[str, Any]) -> bool:
 
 def insert_event_log(record: dict[str, Any]) -> bool:
     try:
+        if "severity" in record:
+            del record["severity"]
         supabase.table("event_log").insert(record).execute()
         return True
     except Exception as e:
