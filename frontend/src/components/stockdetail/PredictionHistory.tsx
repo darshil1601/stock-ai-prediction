@@ -212,8 +212,18 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
             </tr>
           </thead>
           <tbody>
-            {history.map((item) => {
-              const rowIs4h = isBtc4hRow(item, isCrypto);
+            {history
+              .filter((item) => {
+                // Filter out 'Daily' records for BTC after the cutover if they are date-only
+                if (isCrypto) {
+                  const is4hZone = (item.predicted_for || "").slice(0, 10) >= BTC_4H_CUTOVER;
+                  const isDateOnly = (item.predicted_for || "").length <= 10 && !item.prediction_target_time;
+                  if (is4hZone && isDateOnly) return false;
+                }
+                return true;
+              })
+              .map((item) => {
+                const rowIs4h = isBtc4hRow(item, isCrypto);
               const hasActual = item.actual_price != null;
               const diffVal = hasActual ? Math.abs(item.predicted_price - item.actual_price!) : null;
               const diffPct = hasActual ? (diffVal! / item.actual_price!) * 100 : null;

@@ -221,8 +221,10 @@ def resolve_history_interval(
         return "1day"
 
     # BTC 4H rollout starts only from the configured cutover date.
-    if symbol == "BTC/USD":
+    if "BTC" in symbol.upper():
         ref_date = _coerce_reference_date(reference) or datetime.now(timezone.utc).date()
+        # Ensure we always return '4h' for BTC after the cutover date, 
+        # even if the reference is ambiguous.
         return "4h" if ref_date >= BTC_4H_CUTOVER_DATE else "1day"
 
     return profile.history_interval
