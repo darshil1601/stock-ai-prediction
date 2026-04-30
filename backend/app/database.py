@@ -15,6 +15,7 @@ from app.services.asset_profile import (
     get_asset_profile,
     parse_candle_timestamp,
     resolve_history_interval,
+    get_market_close_time_utc,
 )
 
 load_dotenv()
