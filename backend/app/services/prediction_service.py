@@ -469,6 +469,16 @@ def _run_prediction_locked(symbol: str = "XAU/USD") -> dict:
         target_time = payload["prediction_target_time"]
         if target_time:
             interval_for_target = resolve_history_interval(symbol, target_time)
+            
+            # CRITICAL FIX: If this is BTC and we are after cutover, NEVER save as '1day'.
+            # This prevents mixed 'Daily' and '4H' records if a stray daily job runs.
+            if "BTC" in symbol.upper() and interval_for_target == "1day":
+                from app.services.asset_profile import BTC_4H_CUTOVER_DATE, _coerce_reference_date
+                ref_date = _coerce_reference_date(target_time)
+                if ref_date and ref_date >= BTC_4H_CUTOVER_DATE:
+                    logger.warning("[%s] Blocking accidental daily prediction save after 4H cutover.", symbol)
+                    return payload
+            
             # Full ISO for intraday, YYYY-MM-DD for daily
             predicted_for_value = target_time if interval_for_target != "1day" else target_time[:10]
             target_date = predicted_for_value
