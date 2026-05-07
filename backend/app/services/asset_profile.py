@@ -113,7 +113,9 @@ ASSET_PROFILES: dict[str, AssetProfile] = {
         history_interval="1day",
         prediction_label="Predicted Next Close",
         target_step=timedelta(days=1),
-        market_close_hour_utc=22,
+        # Bug #4 Fix: EDT (summer) = NY 17:00 → 21:00 UTC. DST-aware logic in
+        # get_market_close_time_utc() takes priority; this is the fallback.
+        market_close_hour_utc=21,
         market_close_minute_utc=0,
         candle_confirmation_buffer_minutes=30,
     ),
@@ -313,8 +315,16 @@ def is_partial_candle(
     interval = resolve_history_interval(symbol, current_utc)
 
     if interval == "1day":
+        # Bug #3 Fix: get_market_close_time_utc() returns a time with tzinfo,
+        # but datetime.combine() with a tzinfo-aware time object can produce a
+        # naive datetime in Python, breaking the comparison with current_utc.
+        # We extract h:m and explicitly construct a UTC-aware datetime instead.
         close_time = get_market_close_time_utc(symbol, candle_utc.date())
-        expected_close = datetime.combine(candle_utc.date(), close_time)
+        expected_close = datetime(
+            candle_utc.year, candle_utc.month, candle_utc.day,
+            close_time.hour, close_time.minute, 0,
+            tzinfo=timezone.utc,
+        )
         cutoff = expected_close + timedelta(minutes=profile.candle_confirmation_buffer_minutes)
         return current_utc < cutoff
 

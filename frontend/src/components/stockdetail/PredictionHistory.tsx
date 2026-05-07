@@ -58,6 +58,23 @@ function formatTargetLabel(item: HistoryItem, showTime: boolean): string {
   return dateStr;
 }
 
+// Bug #5 Fix: Asset-specific delta thresholds.
+// Gold (XAU/USD) moves 0.5–1.5% daily in normal markets.
+// Forex (EUR/USD) moves 0.2–0.5% daily.
+// Using the same tight Forex thresholds for Gold marks valid predictions as MISSED.
+function getAccuracyThresholds(symbol: string) {
+  const isGold = symbol.toUpperCase().includes("XAU") || symbol.toUpperCase().includes("GOLD");
+  if (isGold) {
+    return { perfect: 0.5, success: 1.5, trace: 2.5 };
+  }
+  const isCrypto = symbol.toUpperCase().includes("BTC");
+  if (isCrypto) {
+    return { perfect: 0.5, success: 2.0, trace: 3.5 };
+  }
+  // EUR/USD Forex — tight thresholds
+  return { perfect: 0.2, success: 0.8, trace: 1.5 };
+}
+
 export default function PredictionHistory({ symbol = "gold" }: Props) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +82,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
   const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
 
   const isCrypto = useMemo(() => symbol.toUpperCase().includes("BTC"), [symbol]);
+  const thresholds = useMemo(() => getAccuracyThresholds(symbol), [symbol]);
   const targetHeader = isCrypto ? "Target" : "Target Date";
   const actualHeader = isCrypto ? "Target Candle" : "Market Close";
 
@@ -232,13 +250,13 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
               let accuracyColor = "bg-rose-500/10 text-rose-400 border-rose-500/20";
 
               if (diffPct != null) {
-                if (diffPct < 0.2) {
+                if (diffPct < thresholds.perfect) {
                   accuracyLabel = "PERFECT";
                   accuracyColor = "bg-emerald-500/20 text-emerald-400 border-emerald-400/30";
-                } else if (diffPct < 0.8) {
+                } else if (diffPct < thresholds.success) {
                   accuracyLabel = "SUCCESS";
                   accuracyColor = "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
-                } else if (diffPct < 1.5) {
+                } else if (diffPct < thresholds.trace) {
                   accuracyLabel = "TRACE";
                   accuracyColor = "bg-amber-500/10 text-amber-500 border-amber-500/20";
                 }
@@ -261,7 +279,7 @@ export default function PredictionHistory({ symbol = "gold" }: Props) {
                         </span>
                         {diffPct != null && (
                           <span
-                            className={`text-[9px] font-black uppercase tracking-tighter ${diffPct < 1.5 ? "text-emerald-500/60" : "text-slate-600"
+                            className={`text-[9px] font-black uppercase tracking-tighter ${diffPct < thresholds.trace ? "text-emerald-500/60" : "text-slate-600"
                               }`}
                           >
                             Delta {diffPct.toFixed(2)}% Off

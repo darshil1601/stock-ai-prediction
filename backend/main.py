@@ -214,12 +214,21 @@ scheduler.add_job(
     replace_existing=True,
 )
 
-# Job 2: Primary reconcile at 21:30 UTC — 30 min after close
+# Job 2: Primary reconcile at 21:30 UTC — 30 min after summer close (21:00 UTC EDT)
 scheduler.add_job(
     run_reconcile_job,
     CronTrigger(hour=21, minute=30, timezone=timezone.utc),
     id="reconcile_2130_utc",
     name="Primary Reconcile (UTC)",
+    replace_existing=True,
+)
+
+# Job 2b: Secondary reconcile at 22:30 UTC — catches winter EST close (22:00 UTC)
+scheduler.add_job(
+    run_reconcile_job,
+    CronTrigger(hour=22, minute=30, timezone=timezone.utc),
+    id="reconcile_2230_utc",
+    name="Winter EST Reconcile (UTC)",
     replace_existing=True,
 )
 
@@ -232,12 +241,14 @@ scheduler.add_job(
     replace_existing=True,
 )
 
-# Job 4: Daily auto-prediction at 01:30 UTC = 07:00 AM IST (Early Morning)
-# Runs LSTM for Gold and EUR/USD
+# Job 4: Daily auto-prediction at 13:30 UTC = 19:00 IST (NY session open + 30 min)
+# Running closer to NY open gives the LSTM far more recent price data,
+# cutting the forecast horizon from ~20h (old 01:30 UTC) to ~7.5h before close.
+# Gold and EUR/USD close at NY 17:00 = 21:00 UTC (EDT) or 22:00 UTC (EST).
 scheduler.add_job(
     run_daily_predictions,
-    CronTrigger(hour=1, minute=30, timezone=timezone.utc),
-    id="daily_prediction_0130_utc",
+    CronTrigger(hour=13, minute=30, timezone=timezone.utc),
+    id="daily_prediction_1330_utc",
     name="Daily LSTM Prediction — Macro/Forex (UTC)",
     replace_existing=True,
 )

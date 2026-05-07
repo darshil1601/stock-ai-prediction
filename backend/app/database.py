@@ -346,7 +346,29 @@ def reconcile_predictions():
                     price_map[key] = float(row["close"])
 
                 for pred in preds:
+                    # Primary lookup by stored date
                     actual = price_map.get(pred["predicted_for"])
+
+                    # Bug #1 Fix: DST shift edge case — when clocks change, Twelve Data
+                    # may label the Gold/Forex close candle as the prior or next day.
+                    # Try ±1 day as a fallback before giving up.
+                    if actual is None:
+                        from datetime import date as _date
+                        try:
+                            base_d = datetime.strptime(str(pred["predicted_for"])[:10], "%Y-%m-%d").date()
+                            for delta_days in (-1, 1):
+                                alt_key = (base_d + timedelta(days=delta_days)).strftime("%Y-%m-%d")
+                                alt_actual = price_map.get(alt_key)
+                                if alt_actual is not None:
+                                    actual = alt_actual
+                                    logger.info(
+                                        "[Audit] DST±1 fallback: %s actual matched on %s instead of %s",
+                                        symbol, alt_key, pred["predicted_for"],
+                                    )
+                                    break
+                        except Exception:
+                            pass
+
                     if actual is not None:
                         get_supabase().table("predictions").update({"actual_price": actual}).eq("id", pred["id"]).execute()
             except Exception as exc:
