@@ -346,8 +346,12 @@ def reconcile_predictions():
                     price_map[key] = float(row["close"])
 
                 for pred in preds:
-                    # Primary lookup by stored date
-                    actual = price_map.get(pred["predicted_for"])
+                    # Bug Fix: Always slice predicted_for to date-only ([:10]) before lookup.
+                    # Some records store a full ISO timestamp (e.g. "2026-05-26T21:00:00+00:00")
+                    # instead of a plain date string, causing silent price_map misses that
+                    # leave actual_price permanently NULL and inflate the reported delta.
+                    predicted_for_key = str(pred["predicted_for"])[:10]
+                    actual = price_map.get(predicted_for_key)
 
                     # Bug #1 Fix: DST shift edge case — when clocks change, Twelve Data
                     # may label the Gold/Forex close candle as the prior or next day.

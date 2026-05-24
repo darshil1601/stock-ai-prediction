@@ -116,7 +116,11 @@ def _stabilize_prediction(
 
     short_baseline = float(short_returns.median()) if not short_returns.empty else 0.0
     medium_baseline = float(medium_returns.mean()) if not medium_returns.empty else short_baseline
-    baseline_return = (0.70 * short_baseline) + (0.30 * medium_baseline)
+    # Bug Fix: Use a more balanced short/medium split (was 70/30 short-heavy).
+    # The 70% short weight caused recent strong trending (e.g. Gold bull run)
+    # to dominate the baseline, biasing predictions. 50/50 anchors better to the
+    # medium-term mean, reducing systematic drift in either direction.
+    baseline_return = (0.50 * short_baseline) + (0.50 * medium_baseline)
 
     realized_volatility = float(recent_returns.std()) if len(recent_returns) > 1 else 1e-4
     if not np.isfinite(realized_volatility):
@@ -142,6 +146,11 @@ def _stabilize_prediction(
         dampening = 0.75
     elif profile.asset_class == "forex":
         dampening = 0.95
+    elif profile.asset_class == "commodity":
+        # Bug Fix: Gold/commodity raw returns were not dampened (was 1.0).
+        # Gold LSTM can over-shoot on trending days; dampening 0.90 reduces
+        # the raw prediction magnitude to cut delta vs actual close.
+        dampening = 0.90
     else:
         dampening = 1.0
 
