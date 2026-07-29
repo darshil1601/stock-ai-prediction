@@ -71,12 +71,12 @@ jobs:
 
           echo "✅ Clean code sync to HF Space complete."
 
-      - name: 📤 Upload Model Files to HF Space via API (Batch)
+      - name: 📤 Upload LATEST Model Files to HF Space via API
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           python - <<'EOF'
-          import glob, os, re
+          import glob, os, re, shutil
           from huggingface_hub import HfApi
 
           api = HfApi()
@@ -84,56 +84,46 @@ jobs:
           REPO_TYPE = "space"
           LOCAL_MODELS_DIR = "backend/app/models"
           HF_MODELS_DIR = "backend/app/models"
-          KEEP_VERSIONS = 3
           SYMBOLS = ["btcusd", "eurusd", "xauusd"]
 
-          # ── Step 1: Cleanup old versions on HF Space ──────────────────────────
-          print("🧹 Cleaning up old model versions on HF Space...")
-          try:
-              all_hf_files = list(api.list_repo_files(
-                  repo_id=REPO_ID, repo_type=REPO_TYPE,
-                  token=os.environ["HF_TOKEN"]
-              ))
-              for slug in SYMBOLS:
-                  ver_models = sorted([
-                      f for f in all_hf_files
-                      if re.match(rf"backend/app/models/{slug}_model_v\d+\.h5$", f)
-                  ])
-                  ver_scalers = sorted([
-                      f for f in all_hf_files
-                      if re.match(rf"backend/app/models/{slug}_scaler_v\d+\.pkl$", f)
-                  ])
-                  for old_file in ver_models[:-KEEP_VERSIONS] + ver_scalers[:-KEEP_VERSIONS]:
-                      try:
-                          api.delete_file(
-                              path_in_repo=old_file,
-                              repo_id=REPO_ID, repo_type=REPO_TYPE,
-                              token=os.environ["HF_TOKEN"],
-                              commit_message=f"chore: cleanup old {slug} model versions"
-                          )
-                          print(f"  🗑️  Deleted from HF: {old_file}")
-                      except Exception as e:
-                          print(f"  ⚠️  Could not delete {old_file}: {e}")
-          except Exception as e:
-              print(f"⚠️  HF cleanup skipped (non-fatal): {e}")
+          # ── Step 1: Select ONLY the latest model + scaler per symbol ───────────
+          upload_dir = "/tmp/hf_models_upload"
+          if os.path.exists(upload_dir):
+              shutil.rmtree(upload_dir)
+          os.makedirs(upload_dir, exist_ok=True)
 
-          # ── Step 2: Upload ALL files in ONE single batch commit ────────────────
-          model_files = (
-              glob.glob(f"{LOCAL_MODELS_DIR}/*.h5") +
-              glob.glob(f"{LOCAL_MODELS_DIR}/*.pkl")
-          )
-          if not model_files:
+          for slug in SYMBOLS:
+              versioned_models = sorted(glob.glob(f"{LOCAL_MODELS_DIR}/{slug}_model_v*.h5"))
+              versioned_scalers = sorted(glob.glob(f"{LOCAL_MODELS_DIR}/{slug}_scaler_v*.pkl"))
+              base_model = f"{LOCAL_MODELS_DIR}/{slug}_lstm_model.h5"
+              base_scaler = f"{LOCAL_MODELS_DIR}/{slug}_scaler.pkl"
+
+              files_to_copy = []
+              if versioned_models:
+                  files_to_copy.append(versioned_models[-1])  # latest version only
+              if versioned_scalers:
+                  files_to_copy.append(versioned_scalers[-1])  # latest version only
+              if os.path.exists(base_model):
+                  files_to_copy.append(base_model)
+              if os.path.exists(base_scaler):
+                  files_to_copy.append(base_scaler)
+
+              for f in files_to_copy:
+                  shutil.copy2(f, upload_dir)
+                  print(f"  📦 Selected for HF upload: {os.path.basename(f)}")
+
+          selected = os.listdir(upload_dir)
+          if not selected:
               print("⚠️  No model files found to upload.")
           else:
-              print(f"📤 Uploading {len(model_files)} file(s) as a SINGLE batch commit...")
+              print(f"\n📤 Uploading {len(selected)} file(s) (latest only)...")
               api.upload_folder(
-                  folder_path=LOCAL_MODELS_DIR,
+                  folder_path=upload_dir,
                   path_in_repo=HF_MODELS_DIR,
                   repo_id=REPO_ID,
                   repo_type=REPO_TYPE,
                   token=os.environ["HF_TOKEN"],
-                  allow_patterns=["*.h5", "*.pkl"],
-                  commit_message="chore: batch update trained models",
+                  commit_message="chore: update latest trained models",
               )
-              print(f"✅ Batch upload complete! {len(model_files)} files in 1 commit.")
+              print(f"✅ Upload complete! {len(selected)} files.")
           EOF
