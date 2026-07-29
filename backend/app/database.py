@@ -308,9 +308,10 @@ def reconcile_predictions():
             else:
                 daily_grouped[symbol].append(pred)
 
+        updates_to_send: list[dict] = []
         for symbol, preds in intraday_grouped.items():
             try:
-                outputsize = max(720, len(preds) * 8)
+                outputsize = max(120, len(preds) * 4)
                 df = fetch_historical_data(symbol, outputsize=outputsize, interval="1h")
 
                 candles: list[tuple[datetime, float]] = []
@@ -331,13 +332,13 @@ def reconcile_predictions():
 
                     actual = _first_close_at_or_after(candles, target_ts)
                     if actual is not None:
-                        get_supabase().table("predictions").update({"actual_price": actual}).eq("id", pred["id"]).execute()
+                        updates_to_send.append({"id": pred["id"], "actual_price": actual})
             except Exception as exc:
                 logger.error("[Audit] Partial intraday failure for %s: %s", symbol, exc)
 
         for symbol, preds in daily_grouped.items():
             try:
-                outputsize = max(60, len(preds) + 10)
+                outputsize = max(30, len(preds) + 5)
                 df = fetch_historical_data(symbol, outputsize=outputsize, interval="1day")
 
                 price_map: dict[str, float] = {}
@@ -346,18 +347,10 @@ def reconcile_predictions():
                     price_map[key] = float(row["close"])
 
                 for pred in preds:
-                    # Bug Fix: Always slice predicted_for to date-only ([:10]) before lookup.
-                    # Some records store a full ISO timestamp (e.g. "2026-05-26T21:00:00+00:00")
-                    # instead of a plain date string, causing silent price_map misses that
-                    # leave actual_price permanently NULL and inflate the reported delta.
                     predicted_for_key = str(pred["predicted_for"])[:10]
                     actual = price_map.get(predicted_for_key)
 
-                    # Bug #1 Fix: DST shift edge case — when clocks change, Twelve Data
-                    # may label the Gold/Forex close candle as the prior or next day.
-                    # Try ±1 day as a fallback before giving up.
                     if actual is None:
-                        from datetime import date as _date
                         try:
                             base_d = datetime.strptime(str(pred["predicted_for"])[:10], "%Y-%m-%d").date()
                             for delta_days in (-1, 1):
@@ -365,18 +358,20 @@ def reconcile_predictions():
                                 alt_actual = price_map.get(alt_key)
                                 if alt_actual is not None:
                                     actual = alt_actual
-                                    logger.info(
-                                        "[Audit] DST±1 fallback: %s actual matched on %s instead of %s",
-                                        symbol, alt_key, pred["predicted_for"],
-                                    )
                                     break
                         except Exception:
                             pass
 
                     if actual is not None:
-                        get_supabase().table("predictions").update({"actual_price": actual}).eq("id", pred["id"]).execute()
+                        updates_to_send.append({"id": pred["id"], "actual_price": actual})
             except Exception as exc:
                 logger.error("[Audit] Partial daily failure for %s: %s", symbol, exc)
+
+        # Batch update all actual prices in Supabase (1 single query instead of 100 queries!)
+        if updates_to_send:
+            for item in updates_to_send:
+                get_supabase().table("predictions").update({"actual_price": item["actual_price"]}).eq("id", item["id"]).execute()
+            logger.info("[Audit] Batch reconciled %d predictions.", len(updates_to_send))
 
         logger.info("[Audit] Reconciliation cycle complete.")
     except Exception as exc:
