@@ -8,27 +8,65 @@ from upstash_redis import Redis
 
 load_dotenv()
 
-def _get_redis() -> Redis:
-    """Lazy Redis init — prevents startup crash when secrets are missing."""
+# In-memory fallback dictionary when Redis is not configured
+_memory_cache = {}
+_memory_ttls = {}
+
+def _get_redis() -> Redis | None:
+    """Lazy Redis init — falls back to memory if secrets are missing."""
     url = os.environ.get("UPSTASH_REDIS_REST_URL")
     token = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
     if not url or not token:
-        raise RuntimeError("❌ Redis not configured: Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN")
-    return Redis(url=url, token=token)
+        return None
+    try:
+        return Redis(url=url, token=token)
+    except Exception:
+        return None
 
 # Singleton Redis instance
 _redis_instance: Redis | None = None
+_redis_checked: bool = False
 
-def _get_redis_client() -> Redis:
-    global _redis_instance
-    if _redis_instance is None:
+def _get_redis_client() -> Redis | None:
+    global _redis_instance, _redis_checked
+    if not _redis_checked:
         _redis_instance = _get_redis()
+        _redis_checked = True
     return _redis_instance
 
-# Backward-compat alias used in main.py (_cache._redis.ping() etc.)
 class _RedisProxy:
-    def __getattr__(self, name):
-        return getattr(_get_redis_client(), name)
+    def setex(self, key, time_secs, value):
+        client = _get_redis_client()
+        if client:
+            try:
+                return client.setex(key, time_secs, value)
+            except Exception:
+                pass
+        _memory_cache[key] = value
+
+    def get(self, key):
+        client = _get_redis_client()
+        if client:
+            try:
+                return client.get(key)
+            except Exception:
+                pass
+        return _memory_cache.get(key)
+
+    def delete(self, key):
+        client = _get_redis_client()
+        if client:
+            try:
+                return client.delete(key)
+            except Exception:
+                pass
+        _memory_cache.pop(key, None)
+
+    def ping(self):
+        client = _get_redis_client()
+        if client:
+            return client.ping()
+        return "PONG (memory)"
 
 _redis = _RedisProxy()
 
