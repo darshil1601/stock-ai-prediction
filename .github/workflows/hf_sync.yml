@@ -75,6 +75,16 @@ jobs:
               print("⚠️  No model files found to upload.")
           else:
               print(f"\n📤 Uploading {len(selected)} model file(s) to {REPO_ID}...")
+              try:
+                  api.create_repo(
+                      repo_id=REPO_ID,
+                      repo_type=REPO_TYPE,
+                      token=os.environ["HF_TOKEN"],
+                      exist_ok=True
+                  )
+              except Exception as err:
+                  print(f"⚠️ Repo check/create info: {err}")
+
               api.upload_folder(
                   folder_path=upload_dir,
                   path_in_repo="models",
