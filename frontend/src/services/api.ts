@@ -84,6 +84,6 @@ export const api = {
   },
 
   reconcileHistory: () => {
-    return fetchWithRetry(`/api/reconcile`, { method: 'POST' }, 0);
+    return fetchWithRetry(`/api/reconcile`, { method: 'POST', timeout: 60000 }, 0);
   }
 };

@@ -131,43 +131,17 @@ def refresh_prediction(symbol: str):
 @router.post("/reconcile")
 def manual_reconcile():
     """
-    Manually trigger actual_price reconciliation for all past predictions.
-    Use this to immediately heal NULL actual_prices without waiting for the scheduler.
-    Runs synchronously so you can see the result instantly.
+    Manually trigger actual_price reconciliation for past predictions.
+    Runs asynchronously in background to prevent HTTP gateway timeouts.
     """
     try:
-        from app.database import reconcile_predictions, supabase
-        from datetime import datetime, timezone
-
-        today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-        # Count NULLs before
-        before = supabase.table("predictions") \
-            .select("id", count="exact") \
-            .is_("actual_price", "null") \
-            .lt("predicted_for", today_utc) \
-            .execute()
-        null_before = before.count or 0
-
-        reconcile_predictions()
-
-        # Count NULLs after
-        after = supabase.table("predictions") \
-            .select("id", count="exact") \
-            .is_("actual_price", "null") \
-            .lt("predicted_for", today_utc) \
-            .execute()
-        null_after = after.count or 0
-
-        filled = null_before - null_after
-        logger.info(f"[/reconcile] Manual reconcile: {filled} filled, {null_after} still pending.")
+        from app.database import reconcile_predictions
+        threading.Thread(target=reconcile_predictions, daemon=True, name="manual-reconcile").start()
+        logger.info("[/reconcile] Manual reconcile triggered in background.")
         return {
             "status": "ok",
-            "null_before": null_before,
-            "null_after": null_after,
-            "filled": filled,
-            "message": f"Reconciled {filled} prediction(s). {null_after} still pending (today or no market data).",
+            "message": "Reconciliation started in background. Audit history will update automatically.",
         }
     except Exception as e:
-        logger.error(f"[/reconcile] Manual reconcile failed: {e}", exc_info=True)
+        logger.error(f"[/reconcile] Manual reconcile trigger failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Reconcile error: {e}")
