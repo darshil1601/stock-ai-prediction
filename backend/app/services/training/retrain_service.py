@@ -11,6 +11,20 @@ logger = logging.getLogger(__name__)
 _training_mutex = threading.Lock()
 _training_active = threading.Event()
 
+# Full-retrain throttling: news events can fire many times per hour, and each
+# full retrain pins the CPU for minutes. Allow at most one per cooldown window.
+_full_retrain_lock = threading.Lock()
+_full_retrain_queued = False
+_last_full_retrain_started = 0.0  # time.monotonic(); 0 = never
+
+
+def _full_retrain_cooldown_seconds() -> float:
+    try:
+        hours = float(os.environ.get("RETRAIN_COOLDOWN_HOURS", "12"))
+    except ValueError:
+        hours = 12.0
+    return max(0.0, hours) * 3600.0
+
 
 def auto_retrain_enabled() -> bool:
     """Master switch: must be 1/true/yes for any automatic train_all."""
@@ -85,12 +99,35 @@ def retrain_model(async_start: bool = True) -> None:
         logger.info("[retrain_model] Skipped - set RETRAIN_ON_EVENTS=1")
         return
 
-    def _run():
+    global _full_retrain_queued, _last_full_retrain_started
+    with _full_retrain_lock:
+        if _full_retrain_queued or _training_active.is_set():
+            logger.info("[retrain_model] Skipped - a retrain is already queued or running")
+            return
+        cooldown = _full_retrain_cooldown_seconds()
+        elapsed = time.monotonic() - _last_full_retrain_started
+        if _last_full_retrain_started and elapsed < cooldown:
+            logger.info(
+                "[retrain_model] Skipped - cooldown active (%.1fh left)",
+                (cooldown - elapsed) / 3600.0,
+            )
+            return
+        _full_retrain_queued = True
+        _last_full_retrain_started = time.monotonic()
+
+    def _safe_log(data: dict) -> None:
+        # Status logging must never block training (intelligence_logs has NOT NULL columns).
         try:
             from app.database import save_intelligence_log
+            save_intelligence_log(data)
+        except Exception as log_exc:
+            logger.warning("[retrain_model] Could not save intelligence log: %s", log_exc)
+
+    def _run():
+        try:
             from app.utils.train_all import train_all_symbols
 
-            save_intelligence_log({
+            _safe_log({
                 "message": "[AI-Core] Weekly retrain sequence started.",
                 "level": "INFO",
                 "type": "retraining",
@@ -98,13 +135,17 @@ def retrain_model(async_start: bool = True) -> None:
 
             _run_training_job("full_retrain", train_all_symbols)
 
-            save_intelligence_log({
+            _safe_log({
                 "message": "[AI-Core] Weekly retrain sequence complete. All models updated.",
                 "level": "SUCCESS",
                 "type": "retraining",
             })
         except Exception as exc:
             logger.error("[retrain_model] Failed: %s", exc, exc_info=True)
+        finally:
+            global _full_retrain_queued
+            with _full_retrain_lock:
+                _full_retrain_queued = False
 
     if async_start:
         threading.Thread(target=_run, daemon=True, name="full-retrain").start()
