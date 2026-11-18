@@ -16,8 +16,6 @@ env/
 .env.*
 !.env.example
 
-# Railway / Deploy
-.railway/
 
 
 # ── ML Models (store in cloud, not git) ───

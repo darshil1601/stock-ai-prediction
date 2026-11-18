@@ -327,7 +327,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Hugging Face / Cloud PORT handling
+# PORT handling (container listens on 7860; ECS maps host 9090 -> 7860)
 port = int(os.environ.get("PORT", 7860))
 
 # Event-triggered retrain endpoint

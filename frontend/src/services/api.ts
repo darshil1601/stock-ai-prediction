@@ -1,4 +1,4 @@
-export const BASE_URL = import.meta.env.VITE_API_BASE || 'https://stock-ai-prediction-6kve.onrender.com';
+export const BASE_URL = import.meta.env.VITE_API_BASE || 'https://15-135-231-124.sslip.io';
 
 // Helper for timeout
 const fetchWithTimeout = async (resource: RequestInfo, options: RequestInit & { timeout?: number } = {}) => {
