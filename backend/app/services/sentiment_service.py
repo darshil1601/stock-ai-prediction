@@ -4,6 +4,7 @@ FinBERT-based financial sentiment (-1 .. +1) and coarse label.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from typing import Literal
 
@@ -25,7 +26,9 @@ def _load_finbert():
             import torch
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-            name = "ProsusAI/finbert"
+            # Docker image ships the model at FINBERT_MODEL_PATH (see Dockerfile);
+            # the hub id is only a fallback for local development.
+            name = os.environ.get("FINBERT_MODEL_PATH") or "ProsusAI/finbert"
             _tok = AutoTokenizer.from_pretrained(name)
             _mdl = AutoModelForSequenceClassification.from_pretrained(name)
             _mdl.eval()

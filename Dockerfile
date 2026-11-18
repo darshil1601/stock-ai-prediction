@@ -20,6 +20,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Bake the FinBERT sentiment model into the image so the running container
+# never downloads anything from Hugging Face (fetched once, at build time).
+ENV FINBERT_MODEL_PATH=/opt/finbert
+RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClassification; \
+n='ProsusAI/finbert'; p='/opt/finbert'; \
+AutoTokenizer.from_pretrained(n).save_pretrained(p); \
+AutoModelForSequenceClassification.from_pretrained(n).save_pretrained(p)" \
+    && rm -rf /root/.cache/huggingface
+# Runtime: forbid any Hugging Face network access
+ENV HF_HUB_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=1
+
 # Copy the backend code into the container
 COPY backend/ .
 
